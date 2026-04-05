@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Manage Wood Rates{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mt-3 mb-3">
+  <h4 class="mb-0 fw-bold ki-page-title">
+    <i class="bi bi-currency-rupee me-2 text-primary"></i>Wood Rates Management
+  </h4>
+</div>
+
+<div class="row g-3 justify-content-center">
+  <div class="col-12 col-md-7 col-lg-5">
+    <div class="card shadow-sm border-0">
+      <div class="card-header ki-card-header">
+        <i class="bi bi-pencil-square me-2"></i>Update Price per Square Foot
+      </div>
+      <div class="card-body">
+        <div class="alert alert-info py-2 small">
+          <i class="bi bi-info-circle me-1"></i>
+          Changes apply to <strong>new</strong> quotation calculations immediately.
+          Existing quotation totals are not retroactively updated.
+        </div>
+        <form method="POST" action="{{ url_for('admin.rates') }}" novalidate>
+          {{ form.hidden_tag() }}
+          <div class="mb-3">
+            <label class="form-label fw-medium">
+              <span class="badge bg-primary me-2">Acrylic</span>
+              Rate (&#8377; per sqft)
+            </label>
+            {{ form.acrylic_rate(class="form-control form-control-lg",
+                                  placeholder="e.g. 1200",
+                                  id="acrylic_rate") }}
+            {% for err in form.acrylic_rate.errors %}
+              <div class="text-danger small mt-1">{{ err }}</div>
+            {% endfor %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-medium">
+              <span class="badge bg-success me-2">Laminates</span>
+              Rate (&#8377; per sqft)
+            </label>
+            {{ form.laminates_rate(class="form-control form-control-lg",
+                                    placeholder="e.g. 800") }}
+            {% for err in form.laminates_rate.errors %}
+              <div class="text-danger small mt-1">{{ err }}</div>
+            {% endfor %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-medium">
+              <span class="badge bg-warning text-dark me-2">Veneer</span>
+              Rate (&#8377; per sqft)
+            </label>
+            {{ form.veneer_rate(class="form-control form-control-lg",
+                                 placeholder="e.g. 1500") }}
+            {% for err in form.veneer_rate.errors %}
+              <div class="text-danger small mt-1">{{ err }}</div>
+            {% endfor %}
+          </div>
+          <div class="d-grid">
+            <button type="submit" class="btn btn-primary btn-lg ki-btn-primary fw-bold">
+              <i class="bi bi-check-circle me-2"></i>Update Rates
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-md-5 col-lg-4">
+    <div class="card shadow-sm border-0">
+      <div class="card-header ki-card-header">
+        <i class="bi bi-table me-2"></i>Current Rates
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="ki-table-head">
+            <tr>
+              <th class="ps-3">Material</th>
+              <th class="text-end pe-3">Rate (&#8377;/sqft)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for wt, rate_obj in wood_rates.items() %}
+            <tr>
+              <td class="ps-3 fw-semibold">
+                {% if wt == 'Acrylic' %}<span class="badge bg-primary me-2">A</span>
+                {% elif wt == 'Laminates' %}<span class="badge bg-success me-2">L</span>
+                {% else %}<span class="badge bg-warning text-dark me-2">V</span>{% endif %}
+                {{ wt }}
+              </td>
+              <td class="text-end pe-3 fw-bold text-success fs-6">
+                &#8377;{{ "{:,.0f}".format(rate_obj.rate_per_sqft) }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mt-3">
+      <div class="card-header ki-card-header py-2">
+        <i class="bi bi-lightbulb me-2"></i>How Rates Work
+      </div>
+      <div class="card-body small text-muted">
+        <p class="mb-2">The grand total for a quotation is calculated as:</p>
+        <code class="d-block bg-light p-2 rounded small">
+          Grand Total = Σ (Area × Rate) per wood type
+        </code>
+        <p class="mt-2 mb-0">
+          For example, if a project has 50 sqft of Laminates:<br>
+          <strong>50 × ₹800 = ₹40,000</strong>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

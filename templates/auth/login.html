@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Sign In{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center min-vh-85 py-5">
+  <div class="col-12 col-sm-9 col-md-6 col-lg-4">
+    <!-- Brand header outside card -->
+    <div class="text-center mb-4">
+      <div class="ki-login-icon mb-3">
+        <i class="bi bi-house-heart-fill"></i>
+      </div>
+      <h2 class="fw-bold ki-brand-text">Kundan's Interiors</h2>
+      <p class="text-muted small">Interior Design &amp; Quotation Management</p>
+    </div>
+
+    <div class="card shadow-lg border-0 ki-login-card">
+      <div class="card-body p-4">
+        <h5 class="card-title text-center mb-4 fw-semibold">Sign In to Your Account</h5>
+        <form method="POST" action="{{ url_for('auth.login') }}" novalidate>
+          {{ form.hidden_tag() }}
+          <div class="mb-3">
+            <label for="username" class="form-label fw-medium">
+              <i class="bi bi-person me-1"></i>Username
+            </label>
+            <input type="text" id="username" name="username"
+                   class="form-control form-control-lg {% if form.username.errors %}is-invalid{% endif %}"
+                   placeholder="Enter username"
+                   value="{{ form.username.data or '' }}"
+                   autofocus autocomplete="username" required>
+            {% for err in form.username.errors %}
+              <div class="invalid-feedback">{{ err }}</div>
+            {% endfor %}
+          </div>
+          <div class="mb-4">
+            <label for="password" class="form-label fw-medium">
+              <i class="bi bi-lock me-1"></i>Password
+            </label>
+            <div class="input-group">
+              <input type="password" id="password" name="password"
+                     class="form-control form-control-lg {% if form.password.errors %}is-invalid{% endif %}"
+                     placeholder="Enter password"
+                     autocomplete="current-password" required>
+              <button class="btn btn-outline-secondary" type="button" id="togglePwd" tabindex="-1">
+                <i class="bi bi-eye" id="pwdIcon"></i>
+              </button>
+              {% for err in form.password.errors %}
+                <div class="invalid-feedback">{{ err }}</div>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="d-grid">
+            <button type="submit" class="btn btn-primary btn-lg ki-btn-primary fw-semibold">
+              <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="text-center mt-3">
+      <small class="text-muted">
+        <i class="bi bi-shield-lock me-1"></i>
+        Default admin: <code>admin</code> / <code>admin123</code>
+      </small>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.getElementById('togglePwd').addEventListener('click', function() {
+    const pwd = document.getElementById('password');
+    const icon = document.getElementById('pwdIcon');
+    if (pwd.type === 'password') {
+      pwd.type = 'text';
+      icon.className = 'bi bi-eye-slash';
+    } else {
+      pwd.type = 'password';
+      icon.className = 'bi bi-eye';
+    }
+  });
+</script>
+{% endblock %}

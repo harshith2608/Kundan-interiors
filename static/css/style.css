@@ -1,0 +1,284 @@
+/* =====================================================
+   Kundan's Interiors – Custom Stylesheet
+   ===================================================== */
+
+:root {
+  --ki-primary:   #1a237e;
+  --ki-secondary: #283593;
+  --ki-accent:    #f57f17;
+  --ki-light:     #e8eaf6;
+  --ki-success:   #2e7d32;
+  --ki-text:      #212121;
+  --ki-muted:     #757575;
+  --ki-border:    #e0e0e0;
+  --ki-bg:        #f5f6fa;
+}
+
+/* ---- Base ---- */
+body {
+  background-color: var(--ki-bg);
+  color: var(--ki-text);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 0.925rem;
+}
+
+/* ---- Navbar ---- */
+.ki-navbar {
+  background: linear-gradient(135deg, var(--ki-primary) 0%, var(--ki-secondary) 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  min-height: 54px;
+}
+.ki-navbar .navbar-brand {
+  font-size: 1.1rem;
+  letter-spacing: 0.3px;
+}
+.ki-navbar .nav-link { font-size: 0.875rem; }
+.ki-navbar .nav-link.active { font-weight: 700; }
+/* Dropdown toggle buttons in navbar — match nav-link appearance */
+.ki-navbar .btn-link.nav-link {
+  color: rgba(255,255,255,.85);
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+.ki-navbar .btn-link.nav-link:hover,
+.ki-navbar .btn-link.nav-link:focus { color: #fff; outline: none; box-shadow: none; }
+.ki-navbar .btn-link.nav-link.active { color: #fff; font-weight: 700; }
+
+/* ---- Brand / Login ---- */
+.ki-brand-text { color: var(--ki-primary); }
+.ki-login-icon {
+  font-size: 3.5rem;
+  color: var(--ki-primary);
+  line-height: 1;
+}
+.ki-login-card {
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(26,35,126,0.12) !important;
+}
+.min-vh-85 { min-height: 85vh; }
+
+/* ---- Buttons ---- */
+.ki-btn-primary {
+  background: linear-gradient(135deg, var(--ki-primary), var(--ki-secondary));
+  border: none;
+  color: #fff;
+}
+.ki-btn-primary:hover {
+  background: linear-gradient(135deg, #283593, #1a237e);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(26,35,126,0.25);
+}
+
+/* ---- Cards & Headers ---- */
+.card { border-radius: 10px; }
+.ki-card-header {
+  background: linear-gradient(135deg, var(--ki-primary), var(--ki-secondary));
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.6rem 1rem;
+  border-radius: 10px 10px 0 0 !important;
+}
+
+/* ---- Tables ---- */
+.ki-table-head th {
+  background: var(--ki-primary);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border: none;
+  white-space: nowrap;
+}
+.table-hover tbody tr:hover { background: rgba(26,35,126,0.04); }
+
+/* ---- Page Titles ---- */
+.ki-page-title { color: var(--ki-primary); font-size: 1.2rem; }
+
+/* ---- Links ---- */
+.ki-link { color: var(--ki-primary); }
+.ki-link:hover { color: var(--ki-accent); text-decoration: underline !important; }
+
+/* ---- KPI Cards ---- */
+.ki-kpi-card {
+  border-radius: 12px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.ki-kpi-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.12) !important; }
+.ki-kpi-icon { font-size: 1.8rem; margin-bottom: 4px; opacity: 0.8; }
+.ki-kpi-value { font-size: 1.4rem; font-weight: 700; line-height: 1.2; }
+.ki-kpi-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.8; }
+
+.ki-kpi-blue   { background: linear-gradient(135deg,#1565c0,#1e88e5); color:#fff; }
+.ki-kpi-green  { background: linear-gradient(135deg,#2e7d32,#43a047); color:#fff; }
+.ki-kpi-orange { background: linear-gradient(135deg,#e65100,#fb8c00); color:#fff; }
+.ki-kpi-purple { background: linear-gradient(135deg,#6a1b9a,#ab47bc); color:#fff; }
+
+/* ---- Wood Type Badges ---- */
+.ki-badge-acrylic   { background:#dbeafe; color:#1e40af; font-size:0.75rem; }
+.ki-badge-laminates { background:#dcfce7; color:#166534; font-size:0.75rem; }
+.ki-badge-veneer    { background:#ffedd5; color:#9a3412; font-size:0.75rem; }
+.badge.ki-badge-acrylic, .badge.ki-badge-laminates, .badge.ki-badge-veneer {
+  padding: 4px 8px; border-radius: 6px; font-weight: 600;
+}
+
+/* ---- Grand Total Row ---- */
+.ki-grand-total-row td {
+  background: var(--ki-light);
+  border-top: 2px solid var(--ki-primary) !important;
+}
+
+/* ---- Room Blocks (View page) ---- */
+.ki-room-block { border-radius: 8px; overflow: hidden; border: 1px solid var(--ki-border); }
+.ki-room-title {
+  background: linear-gradient(135deg, #3949ab, #5c6bc0);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 8px 14px;
+}
+
+/* ---- Project Form – Room Cards ---- */
+.room-card {
+  border-left: 4px solid var(--ki-secondary) !important;
+  border-radius: 8px;
+}
+.room-card .card-header {
+  background: var(--ki-light);
+  color: var(--ki-primary);
+  font-weight: 600;
+  border-bottom: 1px solid var(--ki-border);
+}
+.item-table th {
+  background: #f8f9fa;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ki-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.item-table td { vertical-align: middle; }
+.item-table input, .item-table select {
+  font-size: 0.875rem;
+  padding: 5px 8px;
+  height: auto;
+}
+.item-table .form-control:focus,
+.item-table .form-select:focus {
+  border-color: var(--ki-secondary);
+  box-shadow: 0 0 0 0.15rem rgba(57,73,171,0.2);
+}
+.area-display {
+  font-weight: 700;
+  color: var(--ki-primary);
+  min-width: 70px;
+  text-align: center;
+}
+.btn-remove-item {
+  width: 28px; height: 28px;
+  padding: 0; font-size: 0.85rem;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* ---- Live Summary Panel ---- */
+.summary-panel { top: 66px; }
+.summary-wood-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--ki-border);
+  font-size: 0.85rem;
+}
+.summary-wood-row:last-child { border-bottom: none; }
+.summary-wood-label { font-weight: 600; }
+.summary-wood-value { color: var(--ki-success); font-weight: 600; }
+
+/* ---- Sticky Save (Mobile) ---- */
+.ki-sticky-save {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 1040;
+  padding: 8px 12px;
+  /* push up above iPhone home indicator */
+  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  background: rgba(255,255,255,0.95);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.1);
+}
+
+/* ---- Empty State ---- */
+.ki-empty-state { padding: 40px 20px; }
+
+/* ---- Footer ---- */
+.ki-footer {
+  background: #fff;
+  border-top: 1px solid var(--ki-border);
+  margin-top: auto;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 900;
+  padding: 4px;
+}
+/* push content above fixed footer */
+main { padding-bottom: 60px; }
+/* on mobile the sticky Save button sits above the footer — add extra clearance */
+@media (max-width: 991.98px) {
+  main { padding-bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* ---- Custom Autocomplete ---- */
+.ki-ac-dropdown {
+  position: fixed;   /* body-level — never clipped by table or overflow:hidden */
+  z-index: 9999;
+  background: #fff;
+  border: 1px solid #c5cae9;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 6px 16px rgba(26,35,126,0.13);
+  max-height: 220px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;  /* smooth momentum scroll on iOS */
+  display: none;
+}
+.ki-ac-dropdown li {
+  padding: 11px 14px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  list-style: none;
+  border-bottom: 1px solid #f0f0f0;
+  color: var(--ki-text);
+}
+.ki-ac-dropdown li:last-child { border-bottom: none; }
+.ki-ac-dropdown li:hover,
+.ki-ac-dropdown li.active { background: var(--ki-light); color: var(--ki-primary); font-weight: 600; }
+
+/* ---- Responsive tweaks ---- */
+@media (max-width: 575px) {
+  .ki-page-title { font-size: 1rem; }
+  .ki-kpi-value { font-size: 1.1rem; }
+  .ki-kpi-label { font-size: 0.65rem; }
+  .btn-group-sm .btn { padding: 4px 7px; }
+}
+
+@media (max-width: 767px) {
+  .item-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .summary-panel { position: static; }
+}
+
+/* ---- Scrollbar styling (webkit) ---- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f1f1; }
+::-webkit-scrollbar-thumb { background: #bdbdbd; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9e9e9e; }
+
+/* ---- Utility ---- */
+.fs-7 { font-size: 0.8rem; }
+.text-ki { color: var(--ki-primary) !important; }
+.bg-ki { background-color: var(--ki-light) !important; }

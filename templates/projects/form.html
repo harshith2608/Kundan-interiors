@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block head %}
+<style>
+  .room-card { border-left: 4px solid #3949ab; }
+  .room-card .card-header { background: #e8eaf6; color: #1a237e; font-weight: 600; }
+  .item-row td { vertical-align: middle; }
+  .summary-panel { position: sticky; top: 70px; }
+  .wood-badge-acrylic  { background:#e3f2fd; color:#0d47a1; }
+  .wood-badge-laminates{ background:#e8f5e9; color:#1b5e20; }
+  .wood-badge-veneer   { background:#fff3e0; color:#e65100; }
+  @media (max-width:767px) { .item-table-wrap { overflow-x: auto; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mt-3 mb-3">
+  <div>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-1">
+        <li class="breadcrumb-item">
+          <a href="{{ url_for('projects.list_projects') }}" class="text-decoration-none">Quotations</a>
+        </li>
+        <li class="breadcrumb-item active">{{ title }}</li>
+      </ol>
+    </nav>
+    <h4 class="mb-0 fw-bold ki-page-title">
+      <i class="bi bi-file-earmark-plus me-2 text-primary"></i>{{ title }}
+    </h4>
+  </div>
+</div>
+
+<!-- Wood rates for JS (hidden) -->
+<script id="wood-rates-data" type="application/json">{{ rates | tojson }}</script>
+<!-- Existing rooms data for edit mode -->
+<script id="existing-rooms-data" type="application/json">{{ rooms_json | safe }}</script>
+<!-- Master lists for custom autocomplete -->
+<script id="master-rooms-json" type="application/json">{{ master_rooms | tojson }}</script>
+<script id="master-items-json" type="application/json">{{ master_items | tojson }}</script>
+
+<form id="projectForm" method="POST"
+      action="{{ url_for('projects.edit_project', project_id=project.id) if project else url_for('projects.create_project') }}"
+      novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="rooms_data" id="rooms_data_field">
+
+  <div class="row g-3">
+    <!-- LEFT: Customer + Rooms -->
+    <div class="col-12 col-lg-8">
+
+      <!-- Customer Details -->
+      <div class="card shadow-sm border-0 mb-3">
+        <div class="card-header ki-card-header">
+          <i class="bi bi-person-badge me-2"></i>Customer Details
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-medium">
+                Customer Name <span class="text-danger">*</span>
+              </label>
+              <input type="text" class="form-control" name="customer_name" id="customer_name"
+                     placeholder="e.g. Rajesh Kumar"
+                     value="{{ form_data.get('customer_name', '') }}"
+                     required maxlength="100" autocomplete="off">
+              <div class="invalid-feedback">Customer name is required.</div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-medium">
+                Mobile Number <span class="text-danger">*</span>
+              </label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-telephone"></i></span>
+                <input type="tel" class="form-control" name="mobile" id="mobile"
+                       placeholder="9876543210"
+                       value="{{ form_data.get('mobile', '') }}"
+                       required maxlength="15" pattern="[0-9+\-\s]{7,15}">
+                <div class="invalid-feedback">Valid mobile number is required.</div>
+              </div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-medium">Email <span class="text-muted small">(optional)</span></label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                <input type="email" class="form-control" name="email" id="email"
+                       placeholder="customer@example.com"
+                       value="{{ form_data.get('email', '') }}"
+                       maxlength="100">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rooms Section -->
+      <div class="mb-2">
+        <h6 class="mb-0 fw-bold text-primary">
+          <i class="bi bi-layout-three-columns me-2"></i>Rooms &amp; Items
+        </h6>
+      </div>
+
+      <div id="rooms-container">
+        <!-- Rooms rendered by JS -->
+      </div>
+
+      <div id="no-rooms-hint" class="text-center py-4 text-muted border rounded-3 bg-light">
+        <i class="bi bi-door-open display-4"></i>
+        <p class="mt-2 mb-1">No rooms added yet.</p>
+        <button type="button" class="btn btn-primary btn-sm mt-1 ki-btn-primary" onclick="addRoom()">
+          <i class="bi bi-plus-circle me-1"></i>Add First Room
+        </button>
+      </div>
+
+      <!-- Add Room button always at the bottom -->
+      <div class="mt-2" id="add-room-btn-wrap" style="display:none">
+        <button type="button" class="btn btn-primary ki-btn-primary w-100" onclick="addRoom()">
+          <i class="bi bi-plus-circle me-2"></i>Add Another Room
+        </button>
+      </div>
+    </div>
+
+    <!-- RIGHT: Live Summary -->
+    <div class="col-12 col-lg-4">
+      <div class="card shadow-sm border-0 summary-panel">
+        <div class="card-header ki-card-header">
+          <i class="bi bi-calculator me-2"></i>Live Cost Summary
+        </div>
+        <div class="card-body p-3">
+          <div id="summary-content">
+            <p class="text-muted text-center small py-2">Add rooms and items to see the cost breakdown.</p>
+          </div>
+          <hr>
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="fw-bold fs-6">Grand Total</span>
+            <span class="fw-bold fs-5 text-success" id="grand-total-display">&#8377;0.00</span>
+          </div>
+        </div>
+        <div class="card-footer bg-transparent">
+          <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-success fw-bold" onclick="return validateAndSubmit()">
+              <i class="bi bi-check-circle me-2"></i>
+              {{ 'Update Quotation' if project else 'Save Quotation' }}
+            </button>
+            <a href="{{ url_for('projects.list_projects') }}" class="btn btn-outline-secondary btn-sm">
+              <i class="bi bi-x-circle me-1"></i>Cancel
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Wood Rates Reference -->
+      <div class="card shadow-sm border-0 mt-3">
+        <div class="card-header ki-card-header py-2">
+          <i class="bi bi-currency-rupee me-1"></i>Current Rates
+        </div>
+        <ul class="list-group list-group-flush" id="rates-reference">
+          {% for wt, rate in rates.items() %}
+          <li class="list-group-item d-flex justify-content-between py-2">
+            <span class="small fw-medium">{{ wt }}</span>
+            <span class="small text-success fw-bold">&#8377;{{ "{:,.0f}".format(rate) }}/sqft</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile sticky save button -->
+  <div class="d-lg-none ki-sticky-save">
+    <button type="submit" class="btn btn-success w-100 fw-bold py-3" onclick="return validateAndSubmit()">
+      <i class="bi bi-check-circle me-2"></i>
+      {{ 'Update Quotation' if project else 'Save Quotation' }}
+      &nbsp;–&nbsp;<span id="grand-total-mobile">&#8377;0.00</span>
+    </button>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/project_form.js') }}"></script>
+{% endblock %}
