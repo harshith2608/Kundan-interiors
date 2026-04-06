@@ -31,6 +31,8 @@
   </div>
 </div>
 
+<!-- Tell JS whether auto-save should run (new form OR editing a draft) -->
+<script>const IS_DRAFT_FORM = {{ 'true' if (not project or project.status == 'draft') else 'false' }};</script>
 <!-- Wood rates for JS (hidden) -->
 <script id="wood-rates-data" type="application/json">{{ rates | tojson }}</script>
 <!-- Existing rooms data for edit mode -->
@@ -44,6 +46,8 @@
       novalidate>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="rooms_data" id="rooms_data_field">
+  <input type="hidden" name="draft_id" id="draft_id_field"
+         value="{{ project.id if project and project.status == 'draft' else '' }}">
 
   <div class="row g-3">
     <!-- LEFT: Customer + Rooms -->
@@ -140,7 +144,7 @@
           <div class="d-grid gap-2">
             <button type="submit" class="btn btn-success fw-bold" onclick="return validateAndSubmit()">
               <i class="bi bi-check-circle me-2"></i>
-              {{ 'Update Quotation' if project else 'Save Quotation' }}
+              {{ 'Save Quotation' if (not project or project.status == 'draft') else 'Update Quotation' }}
             </button>
             <a href="{{ url_for('projects.list_projects') }}" class="btn btn-outline-secondary btn-sm">
               <i class="bi bi-x-circle me-1"></i>Cancel
@@ -170,7 +174,7 @@
   <div class="d-lg-none ki-sticky-save">
     <button type="submit" class="btn btn-success w-100 fw-bold py-3" onclick="return validateAndSubmit()">
       <i class="bi bi-check-circle me-2"></i>
-      {{ 'Update Quotation' if project else 'Save Quotation' }}
+      {{ 'Save Quotation' if (not project or project.status == 'draft') else 'Update Quotation' }}
       &nbsp;–&nbsp;<span id="grand-total-mobile">&#8377;0.00</span>
     </button>
   </div>

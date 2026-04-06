@@ -12,6 +12,81 @@ let masterItems = [];
 let roomCounter = 0;
 const rooms = {};  // { roomKey: { name, items: { itemKey: { name, lengthFt, lengthIn, widthFt, widthIn, wood_type } } } }
 
+// ─── Draft Auto-Save ──────────────────────────────────────────────────────────
+// Only active on the New Quotation form (IS_DRAFT_FORM = true, set by template).
+// Saves customer name/mobile/email to the server 3 s after the last keystroke.
+// The returned draft_id is stored in a hidden field so the final submit can
+// promote the draft to complete instead of creating a duplicate record.
+let _draftSaveTimer = null;
+
+function scheduleDraftSave() {
+  if (typeof IS_DRAFT_FORM === 'undefined' || !IS_DRAFT_FORM) return;
+  clearTimeout(_draftSaveTimer);
+  _draftSaveTimer = setTimeout(_doSaveDraft, 3000);
+}
+
+async function _doSaveDraft() {
+  const customerName = (document.getElementById('customer_name') || {}).value || '';
+  if (!customerName.trim()) return;   // don't create a draft with no name
+
+  const mobile   = (document.getElementById('mobile') || {}).value || '';
+  const email    = (document.getElementById('email')  || {}).value || '';
+  const draftField = document.getElementById('draft_id_field');
+  const draftId    = draftField ? draftField.value : '';
+  const csrf = (document.querySelector('input[name="csrf_token"]') || {}).value || '';
+
+  // Build current rooms payload (partial data is fine — skip incomplete items)
+  const roomsPayload = [];
+  Object.entries(rooms).forEach(([rk, room]) => {
+    const nameInput = document.getElementById('room_name_' + rk);
+    const roomName  = nameInput ? nameInput.value.trim() : (room.name || '');
+    if (!roomName) return;
+    const itemsPayload = [];
+    Object.values(room.items).forEach(item => {
+      const lDec = ftInToDecimal(item.lengthFt || 0, item.lengthIn || 0);
+      const wDec = ftInToDecimal(item.widthFt  || 0, item.widthIn  || 0);
+      if (!item.name || lDec <= 0 || wDec <= 0) return;
+      itemsPayload.push({
+        name: item.name, length: lDec, width: wDec,
+        wood_type: item.wood_type,
+        area: item.area || parseFloat((lDec * wDec).toFixed(4))
+      });
+    });
+    roomsPayload.push({ name: roomName, items: itemsPayload });
+  });
+
+  try {
+    const resp = await fetch('/api/draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+      body: JSON.stringify({
+        draft_id: draftId || null,
+        customer_name: customerName, mobile, email,
+        rooms_data: roomsPayload
+      })
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (draftField && data.draft_id) draftField.value = data.draft_id;
+      _showDraftIndicator();
+    }
+  } catch (_) { /* silent — auto-save is best-effort */ }
+}
+
+function _showDraftIndicator() {
+  let el = document.getElementById('draft-saved-indicator');
+  if (!el) {
+    el = document.createElement('span');
+    el.id = 'draft-saved-indicator';
+    el.className = 'text-muted small ms-2';
+    const header = document.querySelector('.ki-page-title');
+    if (header) header.appendChild(el);
+  }
+  el.innerHTML = '<i class="bi bi-clock me-1"></i>Draft saved';
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(() => { el.innerHTML = ''; }, 4000);
+}
+
 // ─── Custom Autocomplete ───────────────────────────────────────────────────────
 // Dropdown is appended to <body> so it is never clipped by table overflow or
 // any parent with overflow:hidden — works for both room-name and item-name inputs.
@@ -133,6 +208,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   updateNoRoomsHint();
   recalcAll();
+
+  // Attach auto-save listeners to customer fields (new form only)
+  ['customer_name', 'mobile', 'email'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', scheduleDraftSave);
+  });
 });
 
 // ─── Room Management ──────────────────────────────────────────────────────────
@@ -373,6 +454,9 @@ function recalcAll() {
   const gtMob = document.getElementById('grand-total-mobile');
   if (gtEl)  gtEl.textContent  = fmt;
   if (gtMob) gtMob.textContent = fmt;
+
+  // Auto-save draft whenever the cost summary recalculates (room/item change)
+  scheduleDraftSave();
 }
 
 function renderSummary(woodAreas, grandTotal) {

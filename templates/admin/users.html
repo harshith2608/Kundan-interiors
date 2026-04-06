@@ -47,6 +47,12 @@
           <td class="text-center text-muted small">{{ user.created_at.strftime('%d %b %Y') }}</td>
           <td class="text-center">
             <div class="btn-group btn-group-sm">
+              <button type="button" class="btn btn-outline-primary"
+                      data-bs-toggle="modal"
+                      data-bs-target="#renameUserModal{{ user.id }}"
+                      title="Rename User">
+                <i class="bi bi-pencil"></i>
+              </button>
               <button type="button" class="btn btn-outline-warning"
                       data-bs-toggle="modal"
                       data-bs-target="#changePwdModal{{ user.id }}"
@@ -120,6 +126,35 @@
 
 <!-- Per-user modals -->
 {% for user in users %}
+
+<!-- Rename User Modal -->
+<div class="modal fade" id="renameUserModal{{ user.id }}" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header ki-card-header">
+        <h6 class="modal-title fw-bold">
+          <i class="bi bi-pencil me-2"></i>Rename – {{ user.username }}
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('admin.rename_user', user_id=user.id) }}" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <label class="form-label fw-medium small">New Username</label>
+          <input type="text" name="new_username" class="form-control"
+                 value="{{ user.username }}" required minlength="3" maxlength="80"
+                 autocomplete="off">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-sm btn-primary ki-btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Save
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <!-- Change Password Modal -->
 <div class="modal fade" id="changePwdModal{{ user.id }}" tabindex="-1">

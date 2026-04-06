@@ -34,6 +34,7 @@ class Project(db.Model):
     email = db.Column(db.String(100), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     grand_total = db.Column(db.Float, default=0.0)
+    status = db.Column(db.String(20), default='complete', nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     rooms = db.relationship('Room', backref='project', lazy='dynamic',
@@ -107,3 +108,33 @@ class WoodRate(db.Model):
 
     def __repr__(self):
         return f'<WoodRate {self.wood_type}: {self.rate_per_sqft}>'
+
+
+class ProjectAccess(db.Model):
+    """Grants an employee access to a project they didn't create."""
+    __tablename__ = 'project_access'
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
+    user_id    = db.Column(db.Integer, db.ForeignKey('users.id',    ondelete='CASCADE'), nullable=False)
+    granted_by = db.Column(db.Integer, db.ForeignKey('users.id'),   nullable=False)
+    granted_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    grantee = db.relationship('User', foreign_keys=[user_id])
+
+    __table_args__ = (db.UniqueConstraint('project_id', 'user_id', name='uq_project_access'),)
+
+    def __repr__(self):
+        return f'<ProjectAccess project={self.project_id} user={self.user_id}>'
+
+
+class ProjectEditLog(db.Model):
+    __tablename__ = 'project_edit_logs'
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    edited_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    edited_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    editor = db.relationship('User')
+
+    def __repr__(self):
+        return f'<EditLog project={self.project_id} by={self.edited_by}>'

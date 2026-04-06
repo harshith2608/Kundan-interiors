@@ -1,10 +1,11 @@
 import json
+from datetime import datetime, timedelta
 from urllib.parse import quote
 from flask import (Blueprint, render_template, redirect, url_for, flash,
                    request, abort, send_file, current_app)
 from flask_login import login_required, current_user
 from . import db
-from .models import Project, Room, Item, MasterRoom, MasterItem, WoodRate
+from .models import Project, Room, Item, MasterRoom, MasterItem, WoodRate, ProjectEditLog, ProjectAccess, User
 from .decorators import admin_required
 
 projects_bp = Blueprint('projects', __name__)
@@ -34,8 +35,8 @@ def _save_project_data(project, rooms_data):
         db.session.add(room)
         db.session.flush()
 
-        # Auto-learn room name
-        if not MasterRoom.query.filter_by(name=room_name).first():
+        # Auto-learn room name (case-insensitive dedup)
+        if not MasterRoom.query.filter(MasterRoom.name.ilike(room_name)).first():
             db.session.add(MasterRoom(name=room_name))
 
         for id_ in rd.get('items', []):
@@ -65,8 +66,8 @@ def _save_project_data(project, rooms_data):
             db.session.add(item)
             wood_areas[wood_type] = wood_areas.get(wood_type, 0.0) + area
 
-            # Auto-learn item name
-            if not MasterItem.query.filter_by(name=item_name).first():
+            # Auto-learn item name (case-insensitive dedup)
+            if not MasterItem.query.filter(MasterItem.name.ilike(item_name)).first():
                 db.session.add(MasterItem(name=item_name))
 
     grand_total = sum(wood_areas.get(wt, 0) * rates.get(wt, 0) for wt in WOOD_TYPES)
@@ -76,12 +77,26 @@ def _save_project_data(project, rooms_data):
 @projects_bp.route('/projects')
 @login_required
 def list_projects():
+    # Purge drafts older than 48 hours
+    cutoff = datetime.utcnow() - timedelta(hours=48)
+    old_drafts = Project.query.filter(
+        Project.status == 'draft',
+        Project.updated_at < cutoff
+    ).all()
+    for d in old_drafts:
+        db.session.delete(d)
+    if old_drafts:
+        db.session.commit()
+
     page = request.args.get('page', 1, type=int)
     search = request.args.get('q', '').strip()
     if current_user.is_admin:
         query = Project.query
     else:
-        query = Project.query.filter_by(created_by=current_user.id)
+        shared_ids = db.session.query(ProjectAccess.project_id).filter_by(user_id=current_user.id)
+        query = Project.query.filter(
+            db.or_(Project.created_by == current_user.id, Project.id.in_(shared_ids))
+        )
     if search:
         query = query.filter(
             db.or_(
@@ -92,7 +107,21 @@ def list_projects():
     projects = query.order_by(Project.created_at.desc()).paginate(
         page=page, per_page=15, error_out=False
     )
-    return render_template('projects/list.html', projects=projects, search=search, title='Quotations')
+
+    # Admin extras: employee list + per-project access map for the modal
+    employees = []
+    access_map = {}
+    if current_user.is_admin:
+        employees = User.query.filter_by(role='employee').order_by(User.username).all()
+        page_ids = [p.id for p in projects.items]
+        rows = ProjectAccess.query.filter(ProjectAccess.project_id.in_(page_ids)).all()
+        for row in rows:
+            access_map.setdefault(row.project_id, []).append(row.user_id)
+
+    employees_json = [{'id': e.id, 'username': e.username} for e in employees]
+    return render_template('projects/list.html', projects=projects, search=search,
+                           title='Quotations', employees=employees,
+                           employees_json=employees_json, access_map=access_map)
 
 
 @projects_bp.route('/projects/new', methods=['GET', 'POST'])
@@ -144,18 +173,32 @@ def create_project():
                                    rooms_json=rooms_json,
                                    project=None)
 
-        project = Project(
-            customer_name=customer_name,
-            mobile=mobile,
-            email=email or None,
-            created_by=current_user.id,
-            grand_total=0.0
-        )
-        db.session.add(project)
-        db.session.flush()
+        # If JS auto-saved a draft, promote it to complete instead of creating new
+        draft_id = request.form.get('draft_id', '').strip()
+        project = None
+        if draft_id:
+            project = Project.query.get(int(draft_id))
+            if not project or project.created_by != current_user.id or project.status != 'draft':
+                project = None
+
+        if project:
+            project.customer_name = customer_name
+            project.mobile = mobile
+            project.email = email or None
+        else:
+            project = Project(
+                customer_name=customer_name,
+                mobile=mobile,
+                email=email or None,
+                created_by=current_user.id,
+                grand_total=0.0
+            )
+            db.session.add(project)
+            db.session.flush()
 
         grand_total = _save_project_data(project, rooms_data)
         project.grand_total = grand_total
+        project.status = 'complete'
         db.session.commit()
 
         flash('Quotation created successfully!', 'success')
@@ -176,7 +219,12 @@ def create_project():
 def view_project(project_id):
     project = Project.query.get_or_404(project_id)
     if not current_user.is_admin and project.created_by != current_user.id:
-        abort(403)
+        if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
+            abort(403)
+    # Drafts have no content to view — send to edit form to complete them
+    if project.status == 'draft':
+        flash('This quotation is still in progress. Complete and save it.', 'warning')
+        return redirect(url_for('projects.edit_project', project_id=project.id))
     rates = _get_wood_rates()
     wood_totals = project.get_wood_totals()
     wood_summary = []
@@ -190,9 +238,14 @@ def view_project(project_id):
                 'rate': rate,
                 'subtotal': area * rate
             })
+    edit_logs = (ProjectEditLog.query
+                 .filter_by(project_id=project.id)
+                 .order_by(ProjectEditLog.edited_at.desc())
+                 .all())
     return render_template('projects/view.html',
                            project=project,
                            wood_summary=wood_summary,
+                           edit_logs=edit_logs,
                            title=f'Quotation – {project.customer_name}')
 
 
@@ -248,14 +301,18 @@ def edit_project(project_id):
                                    rooms_json=rooms_json,
                                    project=project)
 
+        was_draft = project.status == 'draft'
         project.customer_name = customer_name
         project.mobile = mobile
         project.email = email or None
         grand_total = _save_project_data(project, rooms_data)
         project.grand_total = grand_total
+        project.status = 'complete'
+        if not was_draft:
+            db.session.add(ProjectEditLog(project_id=project.id, edited_by=current_user.id))
         db.session.commit()
 
-        flash('Quotation updated successfully!', 'success')
+        flash('Quotation saved successfully!' if was_draft else 'Quotation updated successfully!', 'success')
         return redirect(url_for('projects.view_project', project_id=project.id))
 
     existing_json = _build_rooms_json(project)
@@ -293,6 +350,29 @@ def _build_rooms_json(project):
     return json.dumps(rooms_data)
 
 
+@projects_bp.route('/projects/<int:project_id>/access', methods=['POST'])
+@login_required
+@admin_required
+def set_project_access(project_id):
+    project = Project.query.get_or_404(project_id)
+    selected_ids = set(int(uid) for uid in request.form.getlist('user_ids'))
+
+    # Replace all existing access entries for this project
+    ProjectAccess.query.filter_by(project_id=project_id).delete()
+    for uid in selected_ids:
+        user = User.query.get(uid)
+        if user and user.role == 'employee':
+            db.session.add(ProjectAccess(
+                project_id=project_id,
+                user_id=uid,
+                granted_by=current_user.id
+            ))
+    db.session.commit()
+    count = len(selected_ids)
+    flash(f'Access updated — {count} employee{"s" if count != 1 else ""} can now view this quotation.', 'success')
+    return redirect(url_for('projects.list_projects'))
+
+
 @projects_bp.route('/projects/<int:project_id>/delete', methods=['POST'])
 @login_required
 @admin_required
@@ -309,14 +389,15 @@ def delete_project(project_id):
 def download_pdf(project_id):
     project = Project.query.get_or_404(project_id)
     if not current_user.is_admin and project.created_by != current_user.id:
-        abort(403)
+        if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
+            abort(403)
     from .pdf_utils import generate_pdf
     pdf_buffer = generate_pdf(project)
     filename = f"Quotation_{project.customer_name.replace(' ', '_')}_{project.id}.pdf"
-    # as_attachment=False  →  Content-Disposition: inline
-    # iOS Safari opens the PDF in its built-in viewer (with Share ↑ button).
-    # Desktop browsers open in their PDF viewer; user can save from there.
-    return send_file(pdf_buffer, as_attachment=False,
+    # ?download=1  → Content-Disposition: attachment  (force save to device)
+    # default      → Content-Disposition: inline      (open in viewer / share sheet)
+    as_attachment = request.args.get('download') == '1'
+    return send_file(pdf_buffer, as_attachment=as_attachment,
                      download_name=filename, mimetype='application/pdf')
 
 
@@ -326,7 +407,8 @@ def whatsapp_share(project_id):
     from flask import redirect as flask_redirect
     project = Project.query.get_or_404(project_id)
     if not current_user.is_admin and project.created_by != current_user.id:
-        abort(403)
+        if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
+            abort(403)
 
     rates = _get_wood_rates()
     wood_totals = project.get_wood_totals()

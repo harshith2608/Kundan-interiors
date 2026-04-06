@@ -124,6 +124,22 @@ def delete_user(user_id):
     return redirect(url_for('admin.users'))
 
 
+@admin_bp.route('/users/<int:user_id>/rename', methods=['POST'])
+def rename_user(user_id):
+    user = User.query.get_or_404(user_id)
+    new_username = request.form.get('new_username', '').strip()
+    if not new_username:
+        flash('Username cannot be empty.', 'danger')
+    elif User.query.filter(User.username == new_username, User.id != user_id).first():
+        flash(f'Username "{new_username}" is already taken.', 'danger')
+    else:
+        old_name = user.username
+        user.username = new_username
+        db.session.commit()
+        flash(f'Username changed from "{old_name}" to "{new_username}".', 'success')
+    return redirect(url_for('admin.users'))
+
+
 @admin_bp.route('/users/<int:user_id>/change-password', methods=['POST'])
 def change_user_password(user_id):
     user = User.query.get_or_404(user_id)

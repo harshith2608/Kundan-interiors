@@ -22,17 +22,16 @@
        class="btn btn-warning btn-sm fw-semibold">
       <i class="bi bi-pencil me-1"></i>Edit
     </a>
-    <!-- Download / Share PDF — native share sheet on mobile, direct download on desktop -->
-    <button class="btn btn-secondary btn-sm fw-semibold"
-            onclick="downloadOrSharePDF(this,'{{ url_for('projects.download_pdf', project_id=project.id) }}','{{ project.customer_name | e }}',{{ project.id }})">
-      <i class="bi bi-file-pdf me-1"></i>Download / Share PDF
-    </button>
-    <!-- Text-only WhatsApp summary (no file) -->
-    <a href="{{ url_for('projects.whatsapp_share', project_id=project.id) }}"
-       class="btn btn-success btn-sm fw-semibold"
-       target="_blank" rel="noopener">
-      <i class="bi bi-whatsapp me-1"></i>WhatsApp Message
+    <!-- Download PDF — saves the file to the device -->
+    <a href="{{ url_for('projects.download_pdf', project_id=project.id, download=1) }}"
+       class="btn btn-secondary btn-sm fw-semibold">
+      <i class="bi bi-download me-1"></i>Download PDF
     </a>
+    <!-- Share as PDF — opens share sheet (iOS) or new tab to share the PDF -->
+    <button class="btn btn-success btn-sm fw-semibold"
+            onclick="downloadOrSharePDF(this,'{{ url_for('projects.download_pdf', project_id=project.id) }}','{{ project.customer_name | e }}',{{ project.id }})">
+      <i class="bi bi-whatsapp me-1"></i>Share as PDF
+    </button>
     {% if current_user.is_admin %}
     <button type="button" class="btn btn-danger btn-sm fw-semibold"
             data-bs-toggle="modal" data-bs-target="#deleteModal">
@@ -189,12 +188,41 @@
   </div>
 </div>
 
+<!-- Edit History -->
+{% if edit_logs %}
+<div class="card shadow-sm border-0 mt-3">
+  <div class="card-header ki-card-header">
+    <i class="bi bi-clock-history me-2"></i>Edit History
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-hover mb-0 small">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">#</th>
+          <th>Edited By</th>
+          <th>Date &amp; Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in edit_logs %}
+        <tr>
+          <td class="ps-3 text-muted">{{ loop.revindex }}</td>
+          <td><span class="badge bg-secondary">{{ log.editor.username }}</span></td>
+          <td class="text-muted">{{ log.edited_at.strftime('%d %b %Y, %I:%M %p') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 <!-- Share info banner -->
 <div class="alert alert-info d-flex align-items-start mt-3 py-2" role="alert">
   <i class="bi bi-info-circle fs-5 me-2 flex-shrink-0 mt-1"></i>
   <div class="small">
-    <strong>How to send the PDF to {{ project.customer_name }}:</strong><br>
-    Tap <em>Download / Share PDF</em> → the PDF opens in a new tab →
+    <strong>To send the PDF to {{ project.customer_name }} on WhatsApp:</strong><br>
+    Tap <em>Share as PDF</em> → the PDF opens in a new tab →
     tap the <strong>Share ↑</strong> button in Safari's toolbar →
     pick <strong>WhatsApp</strong> → select the contact → send.
   </div>

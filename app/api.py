@@ -1,6 +1,8 @@
-from flask import Blueprint, jsonify
-from flask_login import login_required
-from .models import MasterRoom, MasterItem, WoodRate
+from datetime import datetime
+from flask import Blueprint, jsonify, request
+from flask_login import login_required, current_user
+from . import db
+from .models import MasterRoom, MasterItem, WoodRate, Project
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -24,3 +26,48 @@ def master_items():
 def wood_rates():
     rates = WoodRate.query.all()
     return jsonify({r.wood_type: r.rate_per_sqft for r in rates})
+
+
+@api_bp.route('/draft', methods=['POST'])
+@login_required
+def save_draft():
+    """Auto-save a draft quotation including rooms/items. Creates on first call, updates thereafter."""
+    from .projects import _save_project_data
+
+    data = request.get_json(silent=True) or {}
+    draft_id   = data.get('draft_id')
+    customer_name = data.get('customer_name', '').strip() or 'Unnamed'
+    mobile     = data.get('mobile', '').strip() or '—'
+    email      = data.get('email', '').strip() or None
+    rooms_data = data.get('rooms_data', [])
+
+    project = None
+    if draft_id:
+        project = Project.query.get(int(draft_id))
+        if not project or project.created_by != current_user.id or project.status != 'draft':
+            project = None
+
+    if project:
+        project.customer_name = customer_name
+        project.mobile        = mobile
+        project.email         = email
+        project.updated_at    = datetime.utcnow()
+    else:
+        project = Project(
+            customer_name=customer_name,
+            mobile=mobile,
+            email=email,
+            created_by=current_user.id,
+            grand_total=0.0,
+            status='draft'
+        )
+        db.session.add(project)
+        db.session.flush()   # get project.id before saving rooms
+
+    # Save rooms/items (replaces any previously auto-saved rooms for this draft)
+    if rooms_data:
+        grand_total = _save_project_data(project, rooms_data)
+        project.grand_total = grand_total
+
+    db.session.commit()
+    return jsonify({'draft_id': project.id})
