@@ -6,12 +6,40 @@ from flask import (Blueprint, render_template, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from . import db
 from .models import (Project, Room, Item, MasterRoom, MasterItem, WoodRate,
-                     ProjectEditLog, ProjectAccess, User, AppSetting, Payment)
+                     ProjectEditLog, ProjectAccess, User, AppSetting, Payment,
+                     PaymentLink, Notification)
 from .decorators import admin_required
 
 projects_bp = Blueprint('projects', __name__)
 
 WOOD_TYPES = ['Acrylic', 'Laminates', 'Veneer']
+
+
+def _send_email(to_address, subject, body):
+    """Send a plain-text email via configured SMTP. Returns True on success."""
+    import smtplib
+    from email.mime.text import MIMEText
+    smtp_host = AppSetting.get('smtp_host', '').strip()
+    smtp_port = int(AppSetting.get('smtp_port', '587') or 587)
+    smtp_user = AppSetting.get('smtp_user', '').strip()
+    smtp_pass = AppSetting.get('smtp_pass', '').strip()
+    from_addr = AppSetting.get('admin_email', '').strip() or smtp_user
+    if not all([smtp_host, smtp_user, smtp_pass, to_address]):
+        return False
+    try:
+        msg = MIMEText(body, 'plain', 'utf-8')
+        msg['Subject'] = subject
+        msg['From']    = f"Kundan's Interiors <{from_addr}>"
+        msg['To']      = to_address
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
+            s.ehlo()
+            s.starttls()
+            s.login(smtp_user, smtp_pass)
+            s.send_message(msg)
+        return True
+    except Exception as exc:
+        current_app.logger.warning(f'Email send failed: {exc}')
+        return False
 
 
 def _get_wood_rates():
@@ -474,9 +502,11 @@ def generate_payment_link(project_id):
         'currency': 'INR',
         'accept_partial': True,
         'description': f"Kundan's Interiors – Quotation #{project.id} for {project.customer_name}",
-        'customer': {'name': project.customer_name, 'contact': '+' + mobile_clean},
+        'customer': {'name': project.customer_name, 'contact': '+' + mobile_clean,
+                     'email': project.email or ''},
         'notify': {'sms': True, 'email': bool(project.email)},
-        'reminder_enable': True
+        'reminder_enable': True,
+        'notes': {'project_id': str(project.id)}
     }).encode()
 
     credentials = base64.b64encode(f'{api_key}:{api_secret}'.encode()).decode()
@@ -489,7 +519,19 @@ def generate_payment_link(project_id):
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = _json.loads(resp.read())
-            return jsonify({'payment_link': data.get('short_url')})
+            link_id  = data.get('id')
+            short_url = data.get('short_url')
+            # Store link so webhook can resolve the project
+            if link_id:
+                existing = PaymentLink.query.filter_by(razorpay_link_id=link_id).first()
+                if not existing:
+                    db.session.add(PaymentLink(
+                        project_id=project.id,
+                        razorpay_link_id=link_id,
+                        amount=remaining
+                    ))
+                    db.session.commit()
+            return jsonify({'payment_link': short_url})
     except urllib.error.HTTPError as e:
         err_body = _json.loads(e.read())
         return jsonify({'error': err_body.get('error', {}).get('description', 'Razorpay error.')}), 400
@@ -604,3 +646,151 @@ def whatsapp_share(project_id):
         mobile = '91' + mobile
     wa_url = f"https://wa.me/{mobile}?text={quote(message)}"
     return flask_redirect(wa_url)
+
+
+@projects_bp.route('/webhook/razorpay', methods=['POST'])
+def razorpay_webhook():
+    """
+    Razorpay sends a POST here whenever a payment link is paid.
+    We verify the signature, auto-record the payment, create an in-app
+    notification, and email both the customer and the admin.
+    This endpoint is CSRF-exempt (Razorpay is the caller, not a browser).
+    """
+    import hmac as _hmac
+    import hashlib as _hashlib
+    import json as _json
+    from flask import jsonify
+
+    # ── 1. Read raw body for signature verification
+    raw_body = request.get_data()
+    signature = request.headers.get('X-Razorpay-Signature', '')
+    webhook_secret = AppSetting.get('webhook_secret', '').strip()
+
+    if webhook_secret:
+        expected = _hmac.new(
+            webhook_secret.encode('utf-8'),
+            raw_body,
+            _hmac.new.__class__  # placeholder — use hashlib directly below
+        )
+        expected = _hmac.new(
+            webhook_secret.encode('utf-8'),
+            raw_body,
+            _hashlib.sha256
+        ).hexdigest()
+        if not _hmac.compare_digest(expected, signature):
+            current_app.logger.warning('Razorpay webhook: invalid signature')
+            return jsonify({'error': 'Invalid signature'}), 400
+
+    try:
+        payload = _json.loads(raw_body)
+    except Exception:
+        return jsonify({'error': 'Bad JSON'}), 400
+
+    event = payload.get('event', '')
+    if event != 'payment_link.paid':
+        # We only care about paid events; acknowledge others silently
+        return jsonify({'status': 'ignored'}), 200
+
+    # ── 2. Extract data from webhook payload
+    pl_entity  = payload.get('payload', {}).get('payment_link', {}).get('entity', {})
+    pay_entity = payload.get('payload', {}).get('payment', {}).get('entity', {})
+
+    link_id        = pl_entity.get('id', '')
+    notes          = pl_entity.get('notes') or {}
+    razorpay_pay_id = pay_entity.get('id', '')
+    amount_paise   = pay_entity.get('amount', 0)
+    amount_rupees  = amount_paise / 100.0
+
+    # ── 3. Find project — first via notes, fallback to PaymentLink table
+    project = None
+    proj_id_str = notes.get('project_id') if isinstance(notes, dict) else None
+    if proj_id_str:
+        try:
+            project = Project.query.get(int(proj_id_str))
+        except (ValueError, TypeError):
+            pass
+    if project is None and link_id:
+        pl_record = PaymentLink.query.filter_by(razorpay_link_id=link_id).first()
+        if pl_record:
+            project = pl_record.project
+
+    if project is None:
+        current_app.logger.warning(f'Razorpay webhook: project not found for link {link_id}')
+        return jsonify({'error': 'Project not found'}), 404
+
+    # ── 4. Deduplicate — skip if this Razorpay payment ID was already recorded
+    if razorpay_pay_id and Payment.query.filter_by(razorpay_payment_id=razorpay_pay_id).first():
+        return jsonify({'status': 'duplicate'}), 200
+
+    # ── 5. Auto-record payment (use first admin as recorded_by)
+    admin_user = User.query.filter_by(role='admin').order_by(User.id).first()
+    payment = Payment(
+        project_id=project.id,
+        amount=amount_rupees,
+        note=f'Auto-recorded via Razorpay (Payment ID: {razorpay_pay_id})',
+        recorded_by=admin_user.id if admin_user else None,
+        source='razorpay',
+        razorpay_payment_id=razorpay_pay_id or None
+    )
+    db.session.add(payment)
+
+    # ── 6. Compute updated balance
+    all_payments = Payment.query.filter_by(project_id=project.id).all()
+    total_paid   = sum(p.amount for p in all_payments) + amount_rupees
+    balance      = max(project.grand_total - total_paid, 0)
+
+    # ── 7. In-app notification for admin
+    notif_msg = (
+        f"₹{amount_rupees:,.2f} received from {project.customer_name} "
+        f"(Quotation #{project.id}) via Razorpay.\n"
+        f"Total Paid: ₹{total_paid:,.2f}  |  Balance: ₹{balance:,.2f}"
+    )
+    db.session.add(Notification(
+        title=f'Payment received – {project.customer_name}',
+        message=notif_msg,
+        project_id=project.id
+    ))
+    db.session.commit()
+
+    # ── 8. Email — customer
+    if project.email:
+        customer_body = (
+            f"Dear {project.customer_name},\n\n"
+            f"We have received your payment of ₹{amount_rupees:,.2f} for "
+            f"Quotation #{project.id}.\n\n"
+            f"Total Paid : ₹{total_paid:,.2f}\n"
+            f"Balance Due: ₹{balance:,.2f}\n\n"
+            f"{'Thank you — your account is fully settled!' if balance == 0 else 'Please clear the remaining balance at your earliest convenience.'}\n\n"
+            f"Thank you for choosing Kundan's Interiors!\n"
+            f"We look forward to transforming your space."
+        )
+        _send_email(
+            project.email,
+            f"Payment Received – Quotation #{project.id} | Kundan's Interiors",
+            customer_body
+        )
+
+    # ── 9. Email — admin
+    admin_email = AppSetting.get('admin_email', '').strip()
+    if admin_email:
+        admin_body = (
+            f"New payment received via Razorpay:\n\n"
+            f"Customer   : {project.customer_name}\n"
+            f"Mobile     : {project.mobile}\n"
+            f"Quotation  : #{project.id}\n"
+            f"Amount Paid: ₹{amount_rupees:,.2f}\n"
+            f"Total Paid : ₹{total_paid:,.2f}\n"
+            f"Balance Due: ₹{balance:,.2f}\n"
+            f"Razorpay ID: {razorpay_pay_id}\n\n"
+            f"{'✅ Fully Paid' if balance == 0 else '⏳ Partial Payment'}"
+        )
+        _send_email(
+            admin_email,
+            f"[Kundan's Interiors] Payment ₹{amount_rupees:,.2f} – {project.customer_name}",
+            admin_body
+        )
+
+    current_app.logger.info(
+        f'Razorpay webhook: recorded ₹{amount_rupees} for project {project.id}'
+    )
+    return jsonify({'status': 'ok'}), 200

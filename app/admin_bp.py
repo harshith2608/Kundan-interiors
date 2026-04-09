@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from werkzeug.security import generate_password_hash
 from sqlalchemy import func
 from . import db
-from .models import User, Project, Item, Room, WoodRate, MasterRoom, MasterItem, AppSetting
+from .models import User, Project, Item, Room, WoodRate, MasterRoom, MasterItem, AppSetting, Notification
 from .forms import CreateUserForm, WoodRateForm, ChangePasswordForm
 from .decorators import admin_required
 
@@ -187,11 +187,15 @@ def rates():
 
 @admin_bp.route('/payment-settings', methods=['GET', 'POST'])
 def payment_settings():
-    KEYS = ['razorpay_key_id', 'razorpay_key_secret',
-            'upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code']
+    KEYS = ['razorpay_key_id', 'razorpay_key_secret', 'webhook_secret',
+            'upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code',
+            'admin_email', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass']
     if request.method == 'POST':
         for key in KEYS:
             val = request.form.get(key, '').strip()
+            # Don't blank out secrets if field left empty
+            if key in ('razorpay_key_secret', 'webhook_secret', 'smtp_pass') and not val:
+                continue
             AppSetting.set(key, val)
         db.session.commit()
         flash('Payment settings updated successfully.', 'success')
@@ -199,6 +203,24 @@ def payment_settings():
     settings = {k: AppSetting.get(k, '') for k in KEYS}
     return render_template('admin/payment_settings.html',
                            title='Payment Settings', settings=settings)
+
+
+@admin_bp.route('/notifications')
+def notifications():
+    all_notifs = Notification.query.order_by(Notification.created_at.desc()).all()
+    # Mark all as read when page is opened
+    Notification.query.filter_by(is_read=False).update({'is_read': True})
+    db.session.commit()
+    return render_template('admin/notifications.html',
+                           title='Notifications', notifications=all_notifs)
+
+
+@admin_bp.route('/notifications/clear', methods=['POST'])
+def clear_notifications():
+    Notification.query.delete()
+    db.session.commit()
+    flash('All notifications cleared.', 'success')
+    return redirect(url_for('admin.notifications'))
 
 
 @admin_bp.route('/projects')

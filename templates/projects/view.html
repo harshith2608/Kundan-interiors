@@ -253,7 +253,15 @@
           <td class="text-muted">{{ p.recorded_at.strftime('%d %b %Y') }}</td>
           <td class="fw-semibold text-success">&#8377;{{ "{:,.2f}".format(p.amount) }}</td>
           <td class="text-muted">{{ p.note or '—' }}</td>
-          <td><span class="badge bg-secondary">{{ p.recorder.username }}</span></td>
+          <td>
+            {% if p.source == 'razorpay' %}
+            <span class="badge bg-success"><i class="bi bi-link-45deg me-1"></i>Razorpay Auto</span>
+            {% elif p.recorder %}
+            <span class="badge bg-secondary">{{ p.recorder.username }}</span>
+            {% else %}
+            <span class="badge bg-secondary">System</span>
+            {% endif %}
+          </td>
           {% if current_user.is_admin %}
           <td>
             <form method="POST"

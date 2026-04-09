@@ -154,17 +154,50 @@ class AppSetting(db.Model):
 class Payment(db.Model):
     """Records a partial or full payment made by a customer for a project."""
     __tablename__ = 'payments'
-    id          = db.Column(db.Integer, primary_key=True)
-    project_id  = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
-    amount      = db.Column(db.Float, nullable=False)
-    note        = db.Column(db.String(200), nullable=True)
-    recorded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    recorded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    id                  = db.Column(db.Integer, primary_key=True)
+    project_id          = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
+    amount              = db.Column(db.Float, nullable=False)
+    note                = db.Column(db.String(200), nullable=True)
+    recorded_by         = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    recorded_at         = db.Column(db.DateTime, default=datetime.utcnow)
+    source              = db.Column(db.String(20), default='manual')   # 'manual' or 'razorpay'
+    razorpay_payment_id = db.Column(db.String(100), nullable=True, unique=True)
 
     recorder = db.relationship('User')
 
     def __repr__(self):
         return f'<Payment project={self.project_id} amount={self.amount}>'
+
+
+class PaymentLink(db.Model):
+    """Tracks generated Razorpay payment links so webhooks can find the right project."""
+    __tablename__ = 'payment_links'
+    id               = db.Column(db.Integer, primary_key=True)
+    project_id       = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
+    razorpay_link_id = db.Column(db.String(100), unique=True, nullable=False)
+    amount           = db.Column(db.Float, nullable=False)
+    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
+
+    project = db.relationship('Project')
+
+    def __repr__(self):
+        return f'<PaymentLink {self.razorpay_link_id} project={self.project_id}>'
+
+
+class Notification(db.Model):
+    """In-app notification for admin (e.g. auto payment received)."""
+    __tablename__ = 'notifications'
+    id         = db.Column(db.Integer, primary_key=True)
+    title      = db.Column(db.String(200), nullable=False)
+    message    = db.Column(db.Text, nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='SET NULL'), nullable=True)
+    is_read    = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    project = db.relationship('Project')
+
+    def __repr__(self):
+        return f'<Notification {self.id} read={self.is_read}>'
 
 
 class ProjectEditLog(db.Model):

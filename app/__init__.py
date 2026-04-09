@@ -34,6 +34,10 @@ def create_app(config_name='default'):
     app.register_blueprint(admin_bp)
     app.register_blueprint(api_bp)
 
+    # Razorpay webhook is called by Razorpay servers — exempt from CSRF
+    from .projects import razorpay_webhook
+    csrf.exempt(razorpay_webhook)
+
     @app.template_filter('ft_in')
     def ft_in_filter(decimal_ft):
         """Convert decimal feet to 'X ft Y in' string."""
@@ -52,7 +56,12 @@ def create_app(config_name='default'):
 
     @app.context_processor
     def inject_globals():
-        return {'now': datetime.utcnow()}
+        from flask_login import current_user
+        unread_count = 0
+        if current_user.is_authenticated and current_user.is_admin:
+            from .models import Notification
+            unread_count = Notification.query.filter_by(is_read=False).count()
+        return {'now': datetime.utcnow(), 'unread_notifications_count': unread_count}
 
     with app.app_context():
         db.create_all()

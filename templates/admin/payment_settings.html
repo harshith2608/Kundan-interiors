@@ -34,8 +34,38 @@
             <label class="form-label fw-medium small">API Key Secret</label>
             <input type="password" name="razorpay_key_secret" class="form-control"
                    placeholder="••••••••••••••••••••"
-                   value="{{ settings.razorpay_key_secret }}" autocomplete="off">
-            <div class="form-text text-muted">Stored securely. Leave blank to keep existing secret.</div>
+                   value="" autocomplete="off">
+            <div class="form-text text-muted">Leave blank to keep existing secret.
+              {% if settings.razorpay_key_secret %}<span class="text-success"><i class="bi bi-check-circle me-1"></i>Set</span>{% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Webhook -->
+    <div class="col-12 col-lg-6">
+      <div class="card shadow-sm border-0">
+        <div class="card-header ki-card-header">
+          <i class="bi bi-broadcast me-2"></i>Razorpay Webhook (Auto Payments)
+        </div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">
+            Webhooks let Razorpay notify your app instantly when a customer pays — payments are recorded automatically.
+          </p>
+          <div class="alert alert-info py-2 small mb-3">
+            <strong>Webhook URL to enter in Razorpay Dashboard:</strong><br>
+            <code>https://&lt;your-domain&gt;/webhook/razorpay</code><br>
+            <span class="text-muted">Razorpay Dashboard → Webhooks → Add New Webhook → Event: <strong>payment_link.paid</strong></span>
+          </div>
+          <div class="mb-1">
+            <label class="form-label fw-medium small">Webhook Secret</label>
+            <input type="password" name="webhook_secret" class="form-control"
+                   placeholder="••••••••••••••••••••"
+                   value="" autocomplete="off">
+            <div class="form-text text-muted">Leave blank to keep existing secret.
+              {% if settings.webhook_secret %}<span class="text-success"><i class="bi bi-check-circle me-1"></i>Set</span>{% endif %}
+            </div>
           </div>
         </div>
       </div>
@@ -62,15 +92,12 @@
     </div>
 
     <!-- Bank Account -->
-    <div class="col-12">
+    <div class="col-12 col-lg-6">
       <div class="card shadow-sm border-0">
         <div class="card-header ki-card-header">
           <i class="bi bi-bank me-2"></i>Bank Account Details
         </div>
         <div class="card-body">
-          <p class="small text-muted mb-3">
-            Shown in quotations for customers who prefer bank transfer.
-          </p>
           <div class="row g-3">
             <div class="col-12 col-sm-6">
               <label class="form-label fw-medium small">Bank Name</label>
@@ -95,6 +122,58 @@
               <input type="text" name="ifsc_code" class="form-control"
                      placeholder="e.g. SBIN0001234"
                      value="{{ settings.ifsc_code }}">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Email Notifications -->
+    <div class="col-12">
+      <div class="card shadow-sm border-0">
+        <div class="card-header ki-card-header">
+          <i class="bi bi-envelope me-2"></i>Email Notifications
+        </div>
+        <div class="card-body">
+          <p class="small text-muted mb-3">
+            When a payment is received automatically via Razorpay, an email is sent to both the customer and admin.
+            Uses Gmail or any SMTP server. For Gmail, use an
+            <a href="https://myaccount.google.com/apppasswords" target="_blank">App Password</a>
+            (not your regular Gmail password).
+          </p>
+          <div class="row g-3">
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-medium small">Admin Email <span class="text-muted">(receives payment alerts)</span></label>
+              <input type="email" name="admin_email" class="form-control"
+                     placeholder="admin@example.com"
+                     value="{{ settings.admin_email }}">
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-medium small">SMTP Host</label>
+              <input type="text" name="smtp_host" class="form-control"
+                     placeholder="smtp.gmail.com"
+                     value="{{ settings.smtp_host }}">
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-medium small">SMTP Port</label>
+              <input type="number" name="smtp_port" class="form-control"
+                     placeholder="587"
+                     value="{{ settings.smtp_port or '587' }}">
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-medium small">SMTP Username <span class="text-muted">(usually your email)</span></label>
+              <input type="email" name="smtp_user" class="form-control"
+                     placeholder="you@gmail.com"
+                     value="{{ settings.smtp_user }}">
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-medium small">SMTP Password / App Password</label>
+              <input type="password" name="smtp_pass" class="form-control"
+                     placeholder="••••••••••••••••"
+                     value="" autocomplete="off">
+              <div class="form-text text-muted">Leave blank to keep existing password.
+                {% if settings.smtp_pass %}<span class="text-success"><i class="bi bi-check-circle me-1"></i>Set</span>{% endif %}
+              </div>
             </div>
           </div>
         </div>
