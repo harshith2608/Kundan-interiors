@@ -70,6 +70,12 @@
             </td>
           </tr>
           {% endif %}
+          {% if project.address %}
+          <tr>
+            <td class="fw-semibold text-muted ps-0">Address</td>
+            <td>{{ project.address }}</td>
+          </tr>
+          {% endif %}
           <tr>
             <td class="fw-semibold text-muted ps-0">Prepared By</td>
             <td><span class="badge bg-secondary">{{ project.creator.username }}</span></td>
@@ -188,6 +194,156 @@
   </div>
 </div>
 
+<!-- Payment Tracking -->
+<div class="card shadow-sm border-0 mt-3">
+  <div class="card-header ki-card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-wallet2 me-2"></i>Payment Status</span>
+    {% if current_user.is_admin %}
+    <button class="btn btn-sm btn-success py-0 px-2" data-bs-toggle="modal" data-bs-target="#recordPaymentModal">
+      <i class="bi bi-plus-lg me-1"></i>Record Payment
+    </button>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <!-- Summary bar -->
+    <div class="row g-2 mb-3 text-center">
+      <div class="col-4">
+        <div class="small text-muted">Total</div>
+        <div class="fw-bold text-dark">&#8377;{{ "{:,.2f}".format(project.grand_total) }}</div>
+      </div>
+      <div class="col-4">
+        <div class="small text-muted">Paid</div>
+        <div class="fw-bold text-success">&#8377;{{ "{:,.2f}".format(total_paid) }}</div>
+      </div>
+      <div class="col-4">
+        <div class="small text-muted">Balance</div>
+        <div class="fw-bold {% if balance > 0 %}text-danger{% else %}text-success{% endif %}">
+          &#8377;{{ "{:,.2f}".format(balance) }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    {% set pct = [(total_paid / project.grand_total * 100) if project.grand_total > 0 else 0, 100] | min %}
+    <div class="progress mb-3" style="height:10px;">
+      <div class="progress-bar bg-success" style="width:{{ pct | round(1) }}%"></div>
+    </div>
+
+    {% if balance <= 0 %}
+    <div class="alert alert-success py-1 mb-2 small text-center">
+      <i class="bi bi-check-circle me-1"></i>Fully paid — Thank you!
+    </div>
+    {% endif %}
+
+    <!-- Payment records -->
+    {% if payments %}
+    <table class="table table-sm table-hover mb-0 small">
+      <thead class="table-light">
+        <tr>
+          <th>Date</th>
+          <th>Amount</th>
+          <th>Note</th>
+          <th>Recorded By</th>
+          {% if current_user.is_admin %}<th></th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in payments %}
+        <tr>
+          <td class="text-muted">{{ p.recorded_at.strftime('%d %b %Y') }}</td>
+          <td class="fw-semibold text-success">&#8377;{{ "{:,.2f}".format(p.amount) }}</td>
+          <td class="text-muted">{{ p.note or '—' }}</td>
+          <td><span class="badge bg-secondary">{{ p.recorder.username }}</span></td>
+          {% if current_user.is_admin %}
+          <td>
+            <form method="POST"
+                  action="{{ url_for('projects.delete_payment', project_id=project.id, payment_id=p.id) }}"
+                  class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-link btn-sm text-danger p-0"
+                      onclick="return confirm('Remove this payment record?')">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted small text-center mb-0">No payments recorded yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- Payment link / UPI / bank details footer -->
+  <div class="card-footer bg-light">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      {% if settings.razorpay_key_id %}
+      <button class="btn btn-primary btn-sm fw-semibold" id="genPayLinkBtn"
+              onclick="generatePaymentLink({{ project.id }})">
+        <i class="bi bi-link-45deg me-1"></i>Generate Payment Link
+      </button>
+      {% endif %}
+      {% if settings.upi_id %}
+      <span class="badge bg-light text-dark border small">
+        <i class="bi bi-phone me-1 text-success"></i>UPI: <strong>{{ settings.upi_id }}</strong>
+      </span>
+      {% endif %}
+      {% if settings.account_number %}
+      <span class="badge bg-light text-dark border small">
+        <i class="bi bi-bank me-1 text-primary"></i>
+        {{ settings.bank_name }} | {{ settings.account_name }} |
+        A/C: {{ settings.account_number }} | IFSC: {{ settings.ifsc_code }}
+      </span>
+      {% endif %}
+      {% if not settings.razorpay_key_id and not settings.upi_id and not settings.account_number %}
+      <span class="text-muted small">
+        <i class="bi bi-info-circle me-1"></i>
+        Configure payment details in <a href="{{ url_for('admin.payment_settings') }}">Admin → Payment Settings</a>.
+      </span>
+      {% endif %}
+    </div>
+    <!-- Payment link result -->
+    <div id="payLinkResult" class="mt-2" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- Record Payment Modal -->
+{% if current_user.is_admin %}
+<div class="modal fade" id="recordPaymentModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header ki-card-header">
+        <h6 class="modal-title fw-bold"><i class="bi bi-wallet2 me-2"></i>Record Payment</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('projects.add_payment', project_id=project.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-medium small">Amount Received (₹) <span class="text-danger">*</span></label>
+            <input type="number" name="amount" class="form-control" min="1" step="0.01"
+                   placeholder="e.g. 50000" required>
+          </div>
+          <div class="mb-1">
+            <label class="form-label fw-medium small">Note <span class="text-muted">(optional)</span></label>
+            <input type="text" name="note" class="form-control" maxlength="200"
+                   placeholder="e.g. Advance payment, UPI transfer">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-sm btn-success fw-semibold">
+            <i class="bi bi-check-lg me-1"></i>Save
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- Edit History -->
 {% if edit_logs %}
 <div class="card shadow-sm border-0 mt-3">
@@ -260,4 +416,51 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}{% endblock %}
+{% block scripts %}
+<script>
+async function generatePaymentLink(projectId) {
+  const btn = document.getElementById('genPayLinkBtn');
+  const resultDiv = document.getElementById('payLinkResult');
+  const csrf = document.querySelector('input[name="csrf_token"]').value;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating…';
+  resultDiv.style.display = 'none';
+  resultDiv.innerHTML = '';
+
+  try {
+    const resp = await fetch(`/projects/${projectId}/payment-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+      body: JSON.stringify({})
+    });
+    const data = await resp.json();
+
+    if (!resp.ok || data.error) {
+      resultDiv.innerHTML = `<div class="alert alert-danger py-1 small mb-0">
+        <i class="bi bi-exclamation-triangle me-1"></i>${data.error || 'Failed to generate link.'}
+      </div>`;
+    } else {
+      const link = data.payment_link;
+      resultDiv.innerHTML = `
+        <div class="alert alert-success py-2 mb-0 small">
+          <i class="bi bi-check-circle me-1"></i><strong>Payment link ready!</strong><br>
+          <a href="${link}" target="_blank" class="text-break">${link}</a>
+          <button class="btn btn-sm btn-outline-success ms-2 py-0"
+                  onclick="navigator.clipboard.writeText('${link}');this.textContent='Copied!'">
+            Copy
+          </button>
+        </div>`;
+    }
+  } catch (e) {
+    resultDiv.innerHTML = `<div class="alert alert-danger py-1 small mb-0">
+      <i class="bi bi-exclamation-triangle me-1"></i>Network error. Please try again.
+    </div>`;
+  } finally {
+    resultDiv.style.display = 'block';
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-link-45deg me-1"></i>Generate Payment Link';
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Payment Settings{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mt-3 mb-3">
+  <h4 class="mb-0 fw-bold ki-page-title">
+    <i class="bi bi-credit-card me-2 text-primary"></i>Payment Settings
+  </h4>
+</div>
+
+<form method="POST" action="{{ url_for('admin.payment_settings') }}" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="row g-3">
+
+    <!-- Razorpay -->
+    <div class="col-12 col-lg-6">
+      <div class="card shadow-sm border-0">
+        <div class="card-header ki-card-header">
+          <i class="bi bi-link-45deg me-2"></i>Razorpay Payment Link
+        </div>
+        <div class="card-body">
+          <p class="small text-muted mb-3">
+            Enter your Razorpay API credentials to generate instant payment links for customers.
+            Get them from <a href="https://dashboard.razorpay.com/app/keys" target="_blank">Razorpay Dashboard → API Keys</a>.
+          </p>
+          <div class="mb-3">
+            <label class="form-label fw-medium small">API Key ID</label>
+            <input type="text" name="razorpay_key_id" class="form-control"
+                   placeholder="rzp_live_xxxxxxxxxxxx"
+                   value="{{ settings.razorpay_key_id }}" autocomplete="off">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-medium small">API Key Secret</label>
+            <input type="password" name="razorpay_key_secret" class="form-control"
+                   placeholder="••••••••••••••••••••"
+                   value="{{ settings.razorpay_key_secret }}" autocomplete="off">
+            <div class="form-text text-muted">Stored securely. Leave blank to keep existing secret.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- UPI -->
+    <div class="col-12 col-lg-6">
+      <div class="card shadow-sm border-0">
+        <div class="card-header ki-card-header">
+          <i class="bi bi-phone me-2"></i>UPI Details
+        </div>
+        <div class="card-body">
+          <p class="small text-muted mb-3">
+            Shown in quotations and PDF so customers can pay directly via UPI.
+          </p>
+          <div class="mb-3">
+            <label class="form-label fw-medium small">UPI ID</label>
+            <input type="text" name="upi_id" class="form-control"
+                   placeholder="yourname@upi"
+                   value="{{ settings.upi_id }}">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bank Account -->
+    <div class="col-12">
+      <div class="card shadow-sm border-0">
+        <div class="card-header ki-card-header">
+          <i class="bi bi-bank me-2"></i>Bank Account Details
+        </div>
+        <div class="card-body">
+          <p class="small text-muted mb-3">
+            Shown in quotations for customers who prefer bank transfer.
+          </p>
+          <div class="row g-3">
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-medium small">Bank Name</label>
+              <input type="text" name="bank_name" class="form-control"
+                     placeholder="e.g. State Bank of India"
+                     value="{{ settings.bank_name }}">
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-medium small">Account Holder Name</label>
+              <input type="text" name="account_name" class="form-control"
+                     placeholder="e.g. Kundan Interiors"
+                     value="{{ settings.account_name }}">
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-medium small">Account Number</label>
+              <input type="text" name="account_number" class="form-control"
+                     placeholder="e.g. 1234567890"
+                     value="{{ settings.account_number }}">
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-medium small">IFSC Code</label>
+              <input type="text" name="ifsc_code" class="form-control"
+                     placeholder="e.g. SBIN0001234"
+                     value="{{ settings.ifsc_code }}">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="mt-3 mb-5">
+    <button type="submit" class="btn btn-primary ki-btn-primary">
+      <i class="bi bi-check-circle me-1"></i>Save Payment Settings
+    </button>
+  </div>
+</form>
+{% endblock %}

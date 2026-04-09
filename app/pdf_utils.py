@@ -34,7 +34,13 @@ TABLE_HEADER_BG = colors.HexColor('#283593')
 ROOM_HEADER_BG = colors.HexColor('#3949ab')
 
 
-def generate_pdf(project):
+def generate_pdf(project, payment_settings=None, total_paid=0.0):
+    """
+    Generate a professional PDF quotation and return a BytesIO buffer.
+    payment_settings: dict with keys upi_id, bank_name, account_name,
+                      account_number, ifsc_code  (optional)
+    total_paid: float – amount already received (optional)
+    """
     """Generate a professional PDF quotation and return a BytesIO buffer."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(
@@ -114,7 +120,13 @@ def generate_pdf(project):
         ['Customer Name', project.customer_name, 'Mobile', project.mobile],
         ['Email', project.email or '—', 'Prepared By', project.creator.username],
     ]
+    if project.address:
+        cust_data.append(['Address', Paragraph(project.address, normal_style), '', ''])
     cust_table = Table(cust_data, colWidths=['18%', '32%', '18%', '32%'])
+    span_cmds = []
+    if project.address:
+        last = len(cust_data) - 1
+        span_cmds = [('SPAN', (1, last), (3, last))]
     cust_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, -1), GREY_BG),
         ('BACKGROUND', (2, 0), (2, -1), GREY_BG),
@@ -127,7 +139,7 @@ def generate_pdf(project):
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('TEXTCOLOR', (0, 0), (0, -1), BRAND_DARK),
         ('TEXTCOLOR', (2, 0), (2, -1), BRAND_DARK),
-    ]))
+    ] + span_cmds))
     elements.append(cust_table)
     elements.append(Spacer(1, 14))
 
@@ -276,6 +288,61 @@ def generate_pdf(project):
         ParagraphStyle('Footer', parent=styles['Normal'],
                        fontSize=9, textColor=BRAND_DARK, alignment=TA_CENTER)
     ))
+
+    # ------- PAYMENT DETAILS -------
+    ps = payment_settings or {}
+    has_payment_info = any([
+        ps.get('upi_id'), ps.get('account_number'),
+        ps.get('bank_name'), total_paid > 0
+    ])
+    if has_payment_info:
+        elements.append(Spacer(1, 14))
+        elements.append(HRFlowable(width='100%', thickness=1, color=BRAND_ACCENT, spaceAfter=8))
+        elements.append(Paragraph("Payment Details", section_style))
+        elements.append(Spacer(1, 6))
+
+        pay_rows = []
+
+        # Payment status row
+        balance = max(project.grand_total - total_paid, 0)
+        if total_paid > 0:
+            pay_rows.append(['Amount Paid', f'Rs. {total_paid:,.2f}',
+                             'Balance Due', f'Rs. {balance:,.2f}'])
+
+        upi   = ps.get('upi_id', '')
+        bname = ps.get('bank_name', '')
+        aname = ps.get('account_name', '')
+        accno = ps.get('account_number', '')
+        ifsc  = ps.get('ifsc_code', '')
+
+        if upi:
+            pay_rows.append(['UPI ID', upi, '', ''])
+        if accno:
+            pay_rows.append(['Bank', bname or '—', 'Account Holder', aname or '—'])
+            pay_rows.append(['Account No.', accno, 'IFSC Code', ifsc or '—'])
+
+        if pay_rows:
+            pay_cw = ['18%', '32%', '18%', '32%']
+            pay_cw_abs = [page_width * float(p.strip('%')) / 100 for p in pay_cw]
+            pay_table = Table(pay_rows, colWidths=pay_cw_abs)
+            span_cmds_pay = []
+            for i, row in enumerate(pay_rows):
+                if row[2] == '' and row[3] == '':
+                    span_cmds_pay.append(('SPAN', (1, i), (3, i)))
+            pay_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (0, -1), GREY_BG),
+                ('BACKGROUND', (2, 0), (2, -1), GREY_BG),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdbdbd')),
+                ('PADDING', (0, 0), (-1, -1), 7),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('TEXTCOLOR', (0, 0), (0, -1), BRAND_DARK),
+                ('TEXTCOLOR', (2, 0), (2, -1), BRAND_DARK),
+            ] + span_cmds_pay))
+            elements.append(pay_table)
 
     doc.build(elements)
     buffer.seek(0)

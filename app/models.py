@@ -32,13 +32,14 @@ class Project(db.Model):
     customer_name = db.Column(db.String(100), nullable=False)
     mobile = db.Column(db.String(20), nullable=False)
     email = db.Column(db.String(100), nullable=True)
+    address = db.Column(db.Text, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     grand_total = db.Column(db.Float, default=0.0)
     status = db.Column(db.String(20), default='complete', nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    rooms = db.relationship('Room', backref='project', lazy='dynamic',
-                            cascade='all, delete-orphan')
+    rooms    = db.relationship('Room',    backref='project', lazy='dynamic', cascade='all, delete-orphan')
+    payments = db.relationship('Payment', backref='project', lazy='dynamic', cascade='all, delete-orphan')
 
     def get_wood_totals(self):
         """Returns dict of {wood_type: total_area}"""
@@ -125,6 +126,45 @@ class ProjectAccess(db.Model):
 
     def __repr__(self):
         return f'<ProjectAccess project={self.project_id} user={self.user_id}>'
+
+
+class AppSetting(db.Model):
+    """Key-value store for admin-configurable app settings (Razorpay, UPI, bank)."""
+    __tablename__ = 'app_settings'
+    key   = db.Column(db.String(100), primary_key=True)
+    value = db.Column(db.Text, nullable=True)
+
+    @classmethod
+    def get(cls, key, default=None):
+        row = cls.query.get(key)
+        return row.value if row else default
+
+    @classmethod
+    def set(cls, key, value):
+        row = cls.query.get(key)
+        if row:
+            row.value = value
+        else:
+            db.session.add(cls(key=key, value=value or ''))
+
+    def __repr__(self):
+        return f'<AppSetting {self.key}>'
+
+
+class Payment(db.Model):
+    """Records a partial or full payment made by a customer for a project."""
+    __tablename__ = 'payments'
+    id          = db.Column(db.Integer, primary_key=True)
+    project_id  = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
+    amount      = db.Column(db.Float, nullable=False)
+    note        = db.Column(db.String(200), nullable=True)
+    recorded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    recorded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    recorder = db.relationship('User')
+
+    def __repr__(self):
+        return f'<Payment project={self.project_id} amount={self.amount}>'
 
 
 class ProjectEditLog(db.Model):

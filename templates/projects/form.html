@@ -93,6 +93,15 @@
                        maxlength="100">
               </div>
             </div>
+            <div class="col-12">
+              <label class="form-label fw-medium">Address <span class="text-muted small">(optional)</span></label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
+                <textarea class="form-control" name="address" id="address" rows="2"
+                          placeholder="Site / delivery address"
+                          maxlength="300">{{ form_data.get('address', '') }}</textarea>
+              </div>
+            </div>
           </div>
         </div>
       </div>

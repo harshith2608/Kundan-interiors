@@ -5,7 +5,8 @@ from flask import (Blueprint, render_template, redirect, url_for, flash,
                    request, abort, send_file, current_app)
 from flask_login import login_required, current_user
 from . import db
-from .models import Project, Room, Item, MasterRoom, MasterItem, WoodRate, ProjectEditLog, ProjectAccess, User
+from .models import (Project, Room, Item, MasterRoom, MasterItem, WoodRate,
+                     ProjectEditLog, ProjectAccess, User, AppSetting, Payment)
 from .decorators import admin_required
 
 projects_bp = Blueprint('projects', __name__)
@@ -135,6 +136,7 @@ def create_project():
         customer_name = request.form.get('customer_name', '').strip()
         mobile = request.form.get('mobile', '').strip()
         email = request.form.get('email', '').strip()
+        address = request.form.get('address', '').strip()
         rooms_json = request.form.get('rooms_data', '[]')
 
         errors = []
@@ -169,7 +171,8 @@ def create_project():
                                    rates=rates,
                                    form_data={'customer_name': customer_name,
                                               'mobile': mobile,
-                                              'email': email},
+                                              'email': email,
+                                              'address': address},
                                    rooms_json=rooms_json,
                                    project=None)
 
@@ -185,11 +188,13 @@ def create_project():
             project.customer_name = customer_name
             project.mobile = mobile
             project.email = email or None
+            project.address = address or None
         else:
             project = Project(
                 customer_name=customer_name,
                 mobile=mobile,
                 email=email or None,
+                address=address or None,
                 created_by=current_user.id,
                 grand_total=0.0
             )
@@ -242,10 +247,23 @@ def view_project(project_id):
                  .filter_by(project_id=project.id)
                  .order_by(ProjectEditLog.edited_at.desc())
                  .all())
+    payments = (Payment.query
+                .filter_by(project_id=project.id)
+                .order_by(Payment.recorded_at.desc())
+                .all())
+    total_paid = sum(p.amount for p in payments)
+    balance    = max(project.grand_total - total_paid, 0)
+    settings   = {k: AppSetting.get(k, '')
+                  for k in ['upi_id', 'bank_name', 'account_name',
+                             'account_number', 'ifsc_code', 'razorpay_key_id']}
     return render_template('projects/view.html',
                            project=project,
                            wood_summary=wood_summary,
                            edit_logs=edit_logs,
+                           payments=payments,
+                           total_paid=total_paid,
+                           balance=balance,
+                           settings=settings,
                            title=f'Quotation – {project.customer_name}')
 
 
@@ -264,6 +282,7 @@ def edit_project(project_id):
         customer_name = request.form.get('customer_name', '').strip()
         mobile = request.form.get('mobile', '').strip()
         email = request.form.get('email', '').strip()
+        address = request.form.get('address', '').strip()
         rooms_json = request.form.get('rooms_data', '[]')
 
         errors = []
@@ -305,6 +324,7 @@ def edit_project(project_id):
         project.customer_name = customer_name
         project.mobile = mobile
         project.email = email or None
+        project.address = address or None
         grand_total = _save_project_data(project, rooms_data)
         project.grand_total = grand_total
         project.status = 'complete'
@@ -324,7 +344,8 @@ def edit_project(project_id):
                            form_data={
                                'customer_name': project.customer_name,
                                'mobile': project.mobile,
-                               'email': project.email or ''
+                               'email': project.email or '',
+                               'address': project.address or ''
                            },
                            rooms_json=existing_json,
                            project=project)
@@ -384,6 +405,98 @@ def delete_project(project_id):
     return redirect(url_for('projects.list_projects'))
 
 
+@projects_bp.route('/projects/<int:project_id>/payments/add', methods=['POST'])
+@login_required
+@admin_required
+def add_payment(project_id):
+    project = Project.query.get_or_404(project_id)
+    try:
+        amount = float(request.form.get('amount', 0))
+    except ValueError:
+        amount = 0
+    if amount <= 0:
+        flash('Please enter a valid payment amount.', 'danger')
+        return redirect(url_for('projects.view_project', project_id=project_id))
+    note = request.form.get('note', '').strip()
+    db.session.add(Payment(
+        project_id=project_id,
+        amount=amount,
+        note=note or None,
+        recorded_by=current_user.id
+    ))
+    db.session.commit()
+    flash(f'Payment of ₹{amount:,.2f} recorded successfully.', 'success')
+    return redirect(url_for('projects.view_project', project_id=project_id))
+
+
+@projects_bp.route('/projects/<int:project_id>/payments/<int:payment_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_payment(project_id, payment_id):
+    payment = Payment.query.get_or_404(payment_id)
+    if payment.project_id != project_id:
+        abort(404)
+    db.session.delete(payment)
+    db.session.commit()
+    flash('Payment record removed.', 'success')
+    return redirect(url_for('projects.view_project', project_id=project_id))
+
+
+@projects_bp.route('/projects/<int:project_id>/payment-link', methods=['POST'])
+@login_required
+def generate_payment_link(project_id):
+    from flask import jsonify
+    import urllib.request, urllib.error
+    import json as _json, base64
+
+    project = Project.query.get_or_404(project_id)
+    if not current_user.is_admin and project.created_by != current_user.id:
+        if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
+            return jsonify({'error': 'Access denied.'}), 403
+
+    api_key    = AppSetting.get('razorpay_key_id', '')
+    api_secret = AppSetting.get('razorpay_key_secret', '')
+    if not api_key or not api_secret:
+        return jsonify({'error': 'Razorpay is not configured. Ask admin to add API keys in Payment Settings.'}), 400
+
+    payments   = Payment.query.filter_by(project_id=project_id).all()
+    total_paid = sum(p.amount for p in payments)
+    remaining  = max(project.grand_total - total_paid, 0)
+    if remaining <= 0:
+        return jsonify({'error': 'This quotation is fully paid — no outstanding balance.'}), 400
+
+    mobile_clean = project.mobile.lstrip('+').replace(' ', '').replace('-', '')
+    if not mobile_clean.startswith('91') and len(mobile_clean) == 10:
+        mobile_clean = '91' + mobile_clean
+
+    payload = _json.dumps({
+        'amount': int(remaining * 100),
+        'currency': 'INR',
+        'accept_partial': True,
+        'description': f"Kundan's Interiors – Quotation #{project.id} for {project.customer_name}",
+        'customer': {'name': project.customer_name, 'contact': '+' + mobile_clean},
+        'notify': {'sms': True, 'email': bool(project.email)},
+        'reminder_enable': True
+    }).encode()
+
+    credentials = base64.b64encode(f'{api_key}:{api_secret}'.encode()).decode()
+    req = urllib.request.Request(
+        'https://api.razorpay.com/v1/payment_links',
+        data=payload,
+        headers={'Content-Type': 'application/json', 'Authorization': f'Basic {credentials}'},
+        method='POST'
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = _json.loads(resp.read())
+            return jsonify({'payment_link': data.get('short_url')})
+    except urllib.error.HTTPError as e:
+        err_body = _json.loads(e.read())
+        return jsonify({'error': err_body.get('error', {}).get('description', 'Razorpay error.')}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @projects_bp.route('/projects/<int:project_id>/pdf')
 @login_required
 def download_pdf(project_id):
@@ -392,7 +505,11 @@ def download_pdf(project_id):
         if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
             abort(403)
     from .pdf_utils import generate_pdf
-    pdf_buffer = generate_pdf(project)
+    pay_settings = {k: AppSetting.get(k, '')
+                    for k in ['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code']}
+    payments_list = Payment.query.filter_by(project_id=project_id).all()
+    total_paid = sum(p.amount for p in payments_list)
+    pdf_buffer = generate_pdf(project, payment_settings=pay_settings, total_paid=total_paid)
     filename = f"Quotation_{project.customer_name.replace(' ', '_')}_{project.id}.pdf"
     # ?download=1  → Content-Disposition: attachment  (force save to device)
     # default      → Content-Disposition: inline      (open in viewer / share sheet)
@@ -413,6 +530,13 @@ def whatsapp_share(project_id):
     rates = _get_wood_rates()
     wood_totals = project.get_wood_totals()
 
+    # Payment info for WhatsApp
+    pay_settings = {k: AppSetting.get(k, '')
+                    for k in ['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code']}
+    payments_list = Payment.query.filter_by(project_id=project_id).all()
+    total_paid = sum(p.amount for p in payments_list)
+    balance = max(project.grand_total - total_paid, 0)
+
     lines = [
         f"Hello {project.customer_name}! 👋",
         f"",
@@ -421,9 +545,10 @@ def whatsapp_share(project_id):
         f"",
         f"📋 *Quotation #{project.id}*",
         f"📅 Date: {project.created_at.strftime('%d %b %Y')}",
-        f"",
-        f"*Room-wise Breakdown:*"
     ]
+    if project.address:
+        lines.append(f"📍 Address: {project.address}")
+    lines += ["", "*Room-wise Breakdown:*"]
     def _ft_in(d):
         feet = int(d); inch = round((d - feet) * 12)
         if inch == 12: feet += 1; inch = 0
@@ -445,6 +570,27 @@ def whatsapp_share(project_id):
     lines += [
         "",
         f"💰 *Grand Total: Rs.{project.grand_total:,.2f}*",
+    ]
+
+    if total_paid > 0:
+        lines.append(f"✅ Amount Paid: Rs.{total_paid:,.2f}")
+        lines.append(f"⏳ Balance Due: Rs.{balance:,.2f}")
+
+    # Payment instructions
+    pay_lines = []
+    if pay_settings.get('upi_id'):
+        pay_lines.append(f"📱 UPI: *{pay_settings['upi_id']}*")
+    if pay_settings.get('account_number'):
+        pay_lines.append(
+            f"🏦 Bank: {pay_settings.get('bank_name', '')} | "
+            f"{pay_settings.get('account_name', '')} | "
+            f"A/C: {pay_settings['account_number']} | "
+            f"IFSC: {pay_settings.get('ifsc_code', '')}"
+        )
+    if pay_lines:
+        lines += ["", "*Payment Details:*"] + pay_lines
+
+    lines += [
         "",
         "_Please find the detailed PDF quotation attached._",
         "",
