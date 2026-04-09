@@ -234,6 +234,7 @@
 {% if current_user.is_admin %}
 <script id="employees-json" type="application/json">{{ employees_json | tojson }}</script>
 <script id="access-map-json" type="application/json">{{ access_map | tojson }}</script>
+<script id="creator-map-json" type="application/json">{{ creator_map | tojson }}</script>
 
 <div class="modal fade" id="accessModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
@@ -268,27 +269,41 @@
     catch (_) { return {}; }
   })();
 
+  const creatorMap = (() => {
+    try { return JSON.parse(document.getElementById('creator-map-json').textContent); }
+    catch (_) { return {}; }
+  })();
+
   window.openAccessModal = function (projectId, customerName) {
     document.getElementById('accessModalTitle').innerHTML =
       '<i class="bi bi-person-check me-2"></i>Employee Access – ' + customerName;
     document.getElementById('accessForm').action = '/projects/' + projectId + '/access';
 
-    const granted = accessMap[projectId] || [];
+    const granted  = accessMap[projectId] || [];
+    const creatorId = creatorMap[projectId];
 
     let html = '<p class="small text-muted mb-3">Check the employees who should be able to view this quotation. Uncheck to remove access.</p>';
     if (employees.length === 0) {
       html = '<p class="text-muted small">No employees found. Add employees first from Admin → Users.</p>';
     } else {
       employees.forEach(emp => {
-        const checked = granted.includes(emp.id) ? 'checked' : '';
+        const isCreator = emp.id === creatorId;
+        const hasAccess = isCreator || granted.includes(emp.id);
+        const checked   = hasAccess ? 'checked' : '';
+        const disabled  = isCreator ? 'disabled' : '';
+
         html += `
           <div class="form-check mb-2">
             <input class="form-check-input" type="checkbox" name="user_ids"
-                   value="${emp.id}" id="acc_emp_${emp.id}" ${checked}>
+                   value="${emp.id}" id="acc_emp_${emp.id}" ${checked} ${disabled}>
             <label class="form-check-label fw-medium" for="acc_emp_${emp.id}">
               <i class="bi bi-person me-1 text-muted"></i>${emp.username}
-              ${checked ? '<span class="badge bg-success ms-1 small">Has access</span>' : ''}
+              ${isCreator
+                ? '<span class="badge bg-primary ms-1 small"><i class="bi bi-pencil me-1"></i>Creator</span>'
+                : (hasAccess ? '<span class="badge bg-success ms-1 small">Has access</span>' : '')
+              }
             </label>
+            ${isCreator ? '<div class="text-muted" style="font-size:0.75rem;margin-left:1.5rem;">Created this quotation — always has access</div>' : ''}
           </div>`;
       });
     }

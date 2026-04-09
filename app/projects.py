@@ -140,17 +140,23 @@ def list_projects():
     # Admin extras: employee list + per-project access map for the modal
     employees = []
     access_map = {}
+    creator_map = {}   # project_id → creator user_id (so modal can lock the creator)
     if current_user.is_admin:
         employees = User.query.filter_by(role='employee').order_by(User.username).all()
         page_ids = [p.id for p in projects.items]
         rows = ProjectAccess.query.filter(ProjectAccess.project_id.in_(page_ids)).all()
         for row in rows:
             access_map.setdefault(row.project_id, []).append(row.user_id)
+        # Build creator map so the modal knows who made each quotation
+        for p in projects.items:
+            creator_map[p.id] = p.created_by
 
     employees_json = [{'id': e.id, 'username': e.username} for e in employees]
     return render_template('projects/list.html', projects=projects, search=search,
                            title='Quotations', employees=employees,
-                           employees_json=employees_json, access_map=access_map)
+                           employees_json=employees_json,
+                           access_map=access_map,
+                           creator_map=creator_map)
 
 
 @projects_bp.route('/projects/new', methods=['GET', 'POST'])
