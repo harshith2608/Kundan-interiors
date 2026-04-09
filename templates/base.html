@@ -153,45 +153,81 @@
 
 <!-- Global: PDF share/download helper -->
 <script>
-async function downloadOrSharePDF(btn, url, customerName, projectId) {
-  // ── HTTPS / localhost only: use Web Share API to pop the native share sheet
-  //    immediately with the PDF file attached (no manual steps needed).
-  // ── HTTP local-network (most common for this app): open the PDF in a new tab.
-  //    Safari's built-in PDF viewer has a Share ↑ button at the top — tap it,
-  //    pick WhatsApp, and send. One file, no duplicates.
+async function downloadOrSharePDF(btn, url, customerName, projectId, mobile) {
+  const filename = 'Quotation_' + (customerName || '').replace(/\s+/g, '_') + '_' + projectId + '.pdf';
 
+  // ── HTTPS / localhost: use Web Share API → native share sheet with PDF attached.
+  // ── HTTP local-network: download the PDF to the device, then open the customer's
+  //    WhatsApp chat so the user can tap 📎 and attach the saved PDF.
   if (window.isSecureContext && navigator.canShare) {
-    // We're on HTTPS — try the full Web Share API path
     const originalHTML = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     try {
       const resp = await fetch(url);
       if (!resp.ok) throw new Error('fetch failed');
       const blob = await resp.blob();
-      const filename = 'Quotation_' + (customerName || '').replace(/\s+/g, '_') + '_' + projectId + '.pdf';
       const file = new File([blob], filename, { type: 'application/pdf' });
 
       if (navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: "Kundan's Interiors – Quotation" });
       } else {
-        // canShare returned false for files (e.g. desktop Chrome) — normal download
-        const objUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = objUrl; a.download = filename; a.click();
-        setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
+        // Desktop or browser without file-share support — just download
+        _triggerDownload(URL.createObjectURL(blob), filename, true);
       }
     } catch (e) {
-      if (e.name !== 'AbortError') window.open(url, '_blank');
+      if (e.name !== 'AbortError') _triggerDownload(url + '?download=1', filename, false);
     } finally {
       btn.disabled = false;
       btn.innerHTML = originalHTML;
     }
+
   } else {
-    // HTTP (local network) — open PDF inline in a new tab.
-    // iOS Safari will show the PDF viewer with a Share ↑ button.
-    window.open(url, '_blank');
+    // HTTP fallback:
+    // 1. Download the PDF to the device
+    _triggerDownload(url + '?download=1', filename, false);
+
+    // 2. After a short delay (let download start), open WhatsApp chat with the customer
+    //    so they can tap 📎 → attach the just-saved PDF
+    if (mobile) {
+      setTimeout(() => {
+        let m = mobile.replace(/\D/g, ''); // strip non-digits
+        if (m.length === 10) m = '91' + m; // add India country code
+        window.open('https://wa.me/' + m, '_blank');
+      }, 1200);
+    }
+
+    // Show a small toast hint
+    _showShareToast();
   }
+}
+
+function _triggerDownload(href, filename, isBlob) {
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  if (isBlob) setTimeout(() => URL.revokeObjectURL(href), 5000);
+}
+
+function _showShareToast() {
+  // Remove any existing toast
+  const old = document.getElementById('_shareToast');
+  if (old) old.remove();
+
+  const toast = document.createElement('div');
+  toast.id = '_shareToast';
+  toast.style.cssText = [
+    'position:fixed', 'bottom:80px', 'left:50%', 'transform:translateX(-50%)',
+    'background:#1a237e', 'color:#fff', 'padding:12px 20px', 'border-radius:12px',
+    'font-size:0.85rem', 'z-index:9999', 'max-width:90vw', 'text-align:center',
+    'box-shadow:0 4px 16px rgba(0,0,0,0.3)', 'line-height:1.5'
+  ].join(';');
+  toast.innerHTML = '📥 PDF saved! &nbsp;In WhatsApp tap <strong>📎</strong> → select the PDF → send.';
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 6000);
 }
 </script>
 
