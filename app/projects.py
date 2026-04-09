@@ -42,6 +42,21 @@ def _send_email(to_address, subject, body):
         return False
 
 
+def _ensure_creator_access(project, creator_user):
+    """Auto-grant ProjectAccess to the creator if they are an employee and don't already have it."""
+    if creator_user.is_admin:
+        return  # admins see everything, no entry needed
+    existing = ProjectAccess.query.filter_by(
+        project_id=project.id, user_id=creator_user.id
+    ).first()
+    if not existing:
+        db.session.add(ProjectAccess(
+            project_id=project.id,
+            user_id=creator_user.id,
+            granted_by=creator_user.id   # self-granted (creator)
+        ))
+
+
 def _get_wood_rates():
     return {r.wood_type: r.rate_per_sqft for r in WoodRate.query.all()}
 
@@ -122,10 +137,10 @@ def list_projects():
     if current_user.is_admin:
         query = Project.query
     else:
-        shared_ids = db.session.query(ProjectAccess.project_id).filter_by(user_id=current_user.id)
-        query = Project.query.filter(
-            db.or_(Project.created_by == current_user.id, Project.id.in_(shared_ids))
-        )
+        # Access is controlled entirely via ProjectAccess for employees
+        # (creator is auto-added to ProjectAccess on save; admin can revoke it)
+        accessible_ids = db.session.query(ProjectAccess.project_id).filter_by(user_id=current_user.id)
+        query = Project.query.filter(Project.id.in_(accessible_ids))
     if search:
         query = query.filter(
             db.or_(
@@ -238,6 +253,7 @@ def create_project():
         grand_total = _save_project_data(project, rooms_data)
         project.grand_total = grand_total
         project.status = 'complete'
+        _ensure_creator_access(project, current_user)
         db.session.commit()
 
         flash('Quotation created successfully!', 'success')
@@ -257,7 +273,7 @@ def create_project():
 @login_required
 def view_project(project_id):
     project = Project.query.get_or_404(project_id)
-    if not current_user.is_admin and project.created_by != current_user.id:
+    if not current_user.is_admin:
         if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
             abort(403)
     # Drafts have no content to view — send to edit form to complete them
@@ -364,6 +380,8 @@ def edit_project(project_id):
         project.status = 'complete'
         if not was_draft:
             db.session.add(ProjectEditLog(project_id=project.id, edited_by=current_user.id))
+        # Ensure the creator (if employee) has a ProjectAccess entry
+        _ensure_creator_access(project, current_user)
         db.session.commit()
 
         flash('Quotation saved successfully!' if was_draft else 'Quotation updated successfully!', 'success')

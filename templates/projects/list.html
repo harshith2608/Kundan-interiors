@@ -279,7 +279,7 @@
       '<i class="bi bi-person-check me-2"></i>Employee Access – ' + customerName;
     document.getElementById('accessForm').action = '/projects/' + projectId + '/access';
 
-    const granted  = accessMap[projectId] || [];
+    const granted   = accessMap[projectId] || [];
     const creatorId = creatorMap[projectId];
 
     let html = '<p class="small text-muted mb-3">Check the employees who should be able to view this quotation. Uncheck to remove access.</p>';
@@ -290,12 +290,11 @@
         const isCreator = emp.id === creatorId;
         const hasAccess = isCreator || granted.includes(emp.id);
         const checked   = hasAccess ? 'checked' : '';
-        const disabled  = isCreator ? 'disabled' : '';
 
         html += `
           <div class="form-check mb-2">
             <input class="form-check-input" type="checkbox" name="user_ids"
-                   value="${emp.id}" id="acc_emp_${emp.id}" ${checked} ${disabled}>
+                   value="${emp.id}" id="acc_emp_${emp.id}" ${checked}>
             <label class="form-check-label fw-medium" for="acc_emp_${emp.id}">
               <i class="bi bi-person me-1 text-muted"></i>${emp.username}
               ${isCreator
@@ -303,7 +302,6 @@
                 : (hasAccess ? '<span class="badge bg-success ms-1 small">Has access</span>' : '')
               }
             </label>
-            ${isCreator ? '<div class="text-muted" style="font-size:0.75rem;margin-left:1.5rem;">Created this quotation — always has access</div>' : ''}
           </div>`;
       });
     }
