@@ -106,33 +106,67 @@
         <i class="bi bi-calculator me-2"></i>Cost Summary
       </div>
       <div class="card-body">
-        {% if wood_summary %}
+        {% if wood_summary or work_summary %}
         <table class="table table-sm align-middle mb-3">
           <thead class="table-light">
             <tr>
-              <th>Material</th>
+              <th>Type</th>
               <th class="text-end">Area (sqft)</th>
               <th class="text-end">Rate (&#8377;/sqft)</th>
               <th class="text-end">Amount (&#8377;)</th>
             </tr>
           </thead>
           <tbody>
+            {% if wood_summary %}
+            <tr><td colspan="4" class="fw-semibold text-muted small py-1 ps-1">Material Cost</td></tr>
             {% for row in wood_summary %}
             <tr>
+              <td><span class="badge ki-badge-{{ row.wood_type|lower }}">{{ row.wood_type }}</span></td>
+              <td class="text-end">{{ "%.2f"|format(row.area) }}</td>
+              <td class="text-end">{{ "{:,.0f}".format(row.rate) }}</td>
+              <td class="text-end fw-semibold">{{ "{:,.2f}".format(row.subtotal) }}</td>
+            </tr>
+            {% endfor %}
+            {% endif %}
+            {% if work_summary %}
+            <tr><td colspan="4" class="fw-semibold text-muted small py-1 ps-1">Work Cost</td></tr>
+            {% for row in work_summary %}
+            <tr>
               <td>
-                <span class="badge ki-badge-{{ row.wood_type|lower }}">{{ row.wood_type }}</span>
+                <span class="badge"
+                      style="{% if row.work_type == 'Box Work' %}background:#7c3aed;{% else %}background:#d97706;{% endif %}color:#fff;">
+                  {{ row.work_type }}
+                </span>
               </td>
               <td class="text-end">{{ "%.2f"|format(row.area) }}</td>
               <td class="text-end">{{ "{:,.0f}".format(row.rate) }}</td>
               <td class="text-end fw-semibold">{{ "{:,.2f}".format(row.subtotal) }}</td>
             </tr>
             {% endfor %}
+            {% endif %}
           </tbody>
           <tfoot>
+            <tr>
+              <td colspan="3" class="fw-semibold text-end text-muted">Subtotal</td>
+              <td class="fw-semibold text-end text-muted">&#8377;{{ "{:,.2f}".format(project.grand_total) }}</td>
+            </tr>
+            {% if project.discount_type != 'none' and project.discount_value %}
+            <tr>
+              <td colspan="3" class="fw-semibold text-end text-danger">
+                Discount
+                {% if project.discount_type == 'percentage' %}
+                  <span class="badge bg-danger ms-1">{{ project.discount_value | int }}%</span>
+                {% else %}
+                  <span class="badge bg-danger ms-1">Fixed</span>
+                {% endif %}
+              </td>
+              <td class="fw-semibold text-end text-danger">- &#8377;{{ "{:,.2f}".format(project.discount_amount) }}</td>
+            </tr>
+            {% endif %}
             <tr class="ki-grand-total-row">
-              <td colspan="3" class="fw-bold text-end fs-6">GRAND TOTAL</td>
+              <td colspan="3" class="fw-bold text-end fs-6">FINAL TOTAL</td>
               <td class="fw-bold text-end fs-5 text-success">
-                &#8377;{{ "{:,.2f}".format(project.grand_total) }}
+                &#8377;{{ "{:,.2f}".format(project.final_total) }}
               </td>
             </tr>
           </tfoot>
@@ -175,10 +209,13 @@
                 <th class="text-center">Width</th>
                 <th class="text-center">Area (sqft)</th>
                 <th class="text-center">Wood Type</th>
+                <th class="text-center">Work Type</th>
+                <th class="text-end">Subtotal (&#8377;)</th>
               </tr>
             </thead>
             <tbody>
               {% for item in room.items.all() %}
+              {% set item_subtotal = item.area * ((rates.get(item.wood_type, 0)) + (work_type_rates.get(item.work_type, 0))) %}
               <tr>
                 <td class="fw-medium">{{ item.name }}</td>
                 <td class="text-center text-nowrap">{{ item.length | ft_in }}</td>
@@ -187,9 +224,28 @@
                 <td class="text-center">
                   <span class="badge ki-badge-{{ item.wood_type|lower }}">{{ item.wood_type }}</span>
                 </td>
+                <td class="text-center">
+                  <span class="badge {% if item.work_type == 'Box Work' %}bg-purple text-white{% else %}bg-warning text-dark{% endif %}"
+                        style="{% if item.work_type == 'Box Work' %}background:#7c3aed!important{% endif %}">
+                    {{ item.work_type }}
+                  </span>
+                </td>
+                <td class="text-end fw-semibold text-success">&#8377;{{ "{:,.2f}".format(item_subtotal) }}</td>
               </tr>
               {% endfor %}
             </tbody>
+            <tfoot>
+              <tr class="table-light">
+                <td colspan="3" class="fw-semibold text-muted text-end small">Room Total</td>
+                <td class="text-center fw-semibold">{{ "%.2f"|format(room.total_area) }} sqft</td>
+                <td colspan="2"></td>
+                {% set room_cost = namespace(val=0) %}
+                {% for item in room.items.all() %}
+                  {% set room_cost.val = room_cost.val + item.area * ((rates.get(item.wood_type, 0)) + (work_type_rates.get(item.work_type, 0))) %}
+                {% endfor %}
+                <td class="text-end fw-bold text-primary">&#8377;{{ "{:,.2f}".format(room_cost.val) }}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
@@ -213,7 +269,7 @@
     <div class="row g-2 mb-3 text-center">
       <div class="col-4">
         <div class="small text-muted">Total</div>
-        <div class="fw-bold text-dark">&#8377;{{ "{:,.2f}".format(project.grand_total) }}</div>
+        <div class="fw-bold text-dark">&#8377;{{ "{:,.2f}".format(project.final_total) }}</div>
       </div>
       <div class="col-4">
         <div class="small text-muted">Paid</div>
@@ -228,7 +284,7 @@
     </div>
 
     <!-- Progress bar -->
-    {% set pct = [(total_paid / project.grand_total * 100) if project.grand_total > 0 else 0, 100] | min %}
+    {% set pct = [(total_paid / project.final_total * 100) if project.final_total > 0 else 0, 100] | min %}
     <div class="progress mb-3" style="height:10px;">
       <div class="progress-bar bg-success" style="width:{{ pct | round(1) }}%"></div>
     </div>

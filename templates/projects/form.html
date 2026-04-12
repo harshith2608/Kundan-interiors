@@ -35,6 +35,8 @@
 <script>const IS_DRAFT_FORM = {{ 'true' if (not project or project.status == 'draft') else 'false' }};</script>
 <!-- Wood rates for JS (hidden) -->
 <script id="wood-rates-data" type="application/json">{{ rates | tojson }}</script>
+<!-- Work type rates for JS (hidden) -->
+<script id="work-type-rates-data" type="application/json">{{ work_type_rates | tojson }}</script>
 <!-- Existing rooms data for edit mode -->
 <script id="existing-rooms-data" type="application/json">{{ rooms_json | safe }}</script>
 <!-- Master lists for custom autocomplete -->
@@ -48,6 +50,10 @@
   <input type="hidden" name="rooms_data" id="rooms_data_field">
   <input type="hidden" name="draft_id" id="draft_id_field"
          value="{{ project.id if project and project.status == 'draft' else '' }}">
+  <input type="hidden" name="discount_type"  id="discount_type_field"
+         value="{{ project.discount_type if project else 'none' }}">
+  <input type="hidden" name="discount_value" id="discount_value_field"
+         value="{{ project.discount_value if project else '0' }}">
 
   <div class="row g-3">
     <!-- LEFT: Customer + Rooms -->
@@ -144,9 +150,36 @@
             <p class="text-muted text-center small py-2">Add rooms and items to see the cost breakdown.</p>
           </div>
           <hr>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="fw-semibold text-muted">Subtotal</span>
+            <span class="fw-semibold text-muted" id="grand-total-display">&#8377;0.00</span>
+          </div>
+
+          <!-- Discount -->
+          <div class="border rounded-2 p-2 mb-2 bg-light">
+            <div class="small fw-semibold text-muted mb-2">
+              <i class="bi bi-tag me-1"></i>Discount
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+              <select class="form-select form-select-sm" id="discount_type_select"
+                      onchange="onDiscountChange()" style="max-width:120px">
+                <option value="none">None</option>
+                <option value="percentage">%</option>
+                <option value="fixed">Fixed &#8377;</option>
+              </select>
+              <input type="number" class="form-control form-control-sm" id="discount_value_input"
+                     placeholder="0" min="0" step="0.01"
+                     oninput="onDiscountChange()" style="display:none">
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-2" id="discount_row" style="display:none!important">
+              <span class="small text-danger">Discount</span>
+              <span class="small text-danger fw-semibold" id="discount-amount-display">- &#8377;0.00</span>
+            </div>
+          </div>
+
           <div class="d-flex justify-content-between align-items-center">
-            <span class="fw-bold fs-6">Grand Total</span>
-            <span class="fw-bold fs-5 text-success" id="grand-total-display">&#8377;0.00</span>
+            <span class="fw-bold fs-6">Final Total</span>
+            <span class="fw-bold fs-5 text-success" id="final-total-display">&#8377;0.00</span>
           </div>
         </div>
         <div class="card-footer bg-transparent">
@@ -162,16 +195,24 @@
         </div>
       </div>
 
-      <!-- Wood Rates Reference -->
+      <!-- Rates Reference -->
       <div class="card shadow-sm border-0 mt-3">
         <div class="card-header ki-card-header py-2">
           <i class="bi bi-currency-rupee me-1"></i>Current Rates
         </div>
-        <ul class="list-group list-group-flush" id="rates-reference">
+        <ul class="list-group list-group-flush">
+          <li class="list-group-item py-1 small text-muted fw-semibold bg-light">Material</li>
           {% for wt, rate in rates.items() %}
           <li class="list-group-item d-flex justify-content-between py-2">
             <span class="small fw-medium">{{ wt }}</span>
             <span class="small text-success fw-bold">&#8377;{{ "{:,.0f}".format(rate) }}/sqft</span>
+          </li>
+          {% endfor %}
+          <li class="list-group-item py-1 small text-muted fw-semibold bg-light">Work Type</li>
+          {% for wt, rate in work_type_rates.items() %}
+          <li class="list-group-item d-flex justify-content-between py-2">
+            <span class="small fw-medium">{{ wt }}</span>
+            <span class="small text-primary fw-bold">&#8377;{{ "{:,.0f}".format(rate) }}/sqft</span>
           </li>
           {% endfor %}
         </ul>
@@ -184,10 +225,83 @@
     <button type="submit" class="btn btn-success w-100 fw-bold py-3" onclick="return validateAndSubmit()">
       <i class="bi bi-check-circle me-2"></i>
       {{ 'Save Quotation' if (not project or project.status == 'draft') else 'Update Quotation' }}
-      &nbsp;–&nbsp;<span id="grand-total-mobile">&#8377;0.00</span>
+      &nbsp;–&nbsp;<span id="final-total-mobile">&#8377;0.00</span>
     </button>
   </div>
 </form>
+
+<!-- Add Item Modal -->
+<div class="modal fade" id="itemModal" tabindex="-1" aria-labelledby="itemModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header ki-card-header py-2">
+        <h6 class="modal-title fw-bold mb-0" id="itemModalLabel">
+          <i class="bi bi-plus-circle me-2"></i>Add Item
+        </h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pb-2">
+        <div class="mb-3">
+          <label class="form-label fw-medium small mb-1">Item Name <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="modal_item_name"
+                 placeholder="e.g. Wardrobe" autocomplete="off">
+          <div class="invalid-feedback">Item name is required.</div>
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label fw-medium small mb-1">Length</label>
+            <div class="input-group">
+              <input type="number" class="form-control text-center" id="modal_item_lft"
+                     placeholder="0" min="0" max="999" step="1" oninput="modalCalcArea()" title="Feet">
+              <span class="input-group-text small text-muted">ft</span>
+              <input type="number" class="form-control text-center" id="modal_item_lin"
+                     placeholder="0" min="0" max="11" step="1" oninput="modalCalcArea()" title="Inches">
+              <span class="input-group-text small text-muted">in</span>
+            </div>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-medium small mb-1">Width</label>
+            <div class="input-group">
+              <input type="number" class="form-control text-center" id="modal_item_wft"
+                     placeholder="0" min="0" max="999" step="1" oninput="modalCalcArea()" title="Feet">
+              <span class="input-group-text small text-muted">ft</span>
+              <input type="number" class="form-control text-center" id="modal_item_win"
+                     placeholder="0" min="0" max="11" step="1" oninput="modalCalcArea()" title="Inches">
+              <span class="input-group-text small text-muted">in</span>
+            </div>
+          </div>
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label fw-medium small mb-1">Wood Type</label>
+            <select class="form-select" id="modal_item_wood">
+              <option value="Acrylic">Acrylic</option>
+              <option value="Laminates" selected>Laminates</option>
+              <option value="Veneer">Veneer</option>
+            </select>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-medium small mb-1">Work Type</label>
+            <select class="form-select" id="modal_item_work">
+              <option value="Box Work" selected>Box Work</option>
+              <option value="Frame Work">Frame Work</option>
+            </select>
+          </div>
+        </div>
+        <div class="d-flex align-items-center justify-content-between bg-light rounded px-3 py-2">
+          <span class="small text-muted fw-medium">Calculated Area</span>
+          <span class="fw-bold text-primary fs-6"><span id="modal_item_area">0.00</span> sqft</span>
+        </div>
+      </div>
+      <div class="modal-footer pt-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary ki-btn-primary" onclick="saveItemFromModal()">
+          <i class="bi bi-check-circle me-1"></i>Add Item
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}

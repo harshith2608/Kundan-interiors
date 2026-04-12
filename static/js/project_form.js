@@ -1,5 +1,5 @@
 /**
- * Kundan's Interiors – Dynamic Project Form
+ * Kundann Interiors – Dynamic Project Form
  * Measurements are entered as Feet + Inches and converted to decimal feet for calculation.
  */
 
@@ -7,10 +7,11 @@
 
 // ─── State ────────────────────────────────────────────────────────────────────
 let woodRates = {};
+let workTypeRates = {};
 let masterRooms = [];
 let masterItems = [];
 let roomCounter = 0;
-const rooms = {};  // { roomKey: { name, items: { itemKey: { name, lengthFt, lengthIn, widthFt, widthIn, wood_type } } } }
+const rooms = {};  // { roomKey: { name, items: { itemKey: { name, lengthFt, lengthIn, widthFt, widthIn, wood_type, work_type } } } }
 
 // ─── Draft Auto-Save ──────────────────────────────────────────────────────────
 // Only active on the New Quotation form (IS_DRAFT_FORM = true, set by template).
@@ -48,7 +49,7 @@ async function _doSaveDraft() {
       if (!item.name || lDec <= 0 || wDec <= 0) return;
       itemsPayload.push({
         name: item.name, length: lDec, width: wDec,
-        wood_type: item.wood_type,
+        wood_type: item.wood_type, work_type: item.work_type,
         area: item.area || parseFloat((lDec * wDec).toFixed(4))
       });
     });
@@ -186,9 +187,10 @@ function decimalToFtIn(decimal) {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  try { woodRates    = JSON.parse(document.getElementById('wood-rates-data').textContent  || '{}'); } catch (e) { woodRates = {}; }
-  try { masterRooms  = JSON.parse(document.getElementById('master-rooms-json').textContent || '[]'); } catch (e) { masterRooms = []; }
-  try { masterItems  = JSON.parse(document.getElementById('master-items-json').textContent || '[]'); } catch (e) { masterItems = []; }
+  try { woodRates     = JSON.parse(document.getElementById('wood-rates-data').textContent      || '{}'); } catch (e) { woodRates = {}; }
+  try { workTypeRates = JSON.parse(document.getElementById('work-type-rates-data').textContent || '{}'); } catch (e) { workTypeRates = {}; }
+  try { masterRooms   = JSON.parse(document.getElementById('master-rooms-json').textContent    || '[]'); } catch (e) { masterRooms = []; }
+  try { masterItems   = JSON.parse(document.getElementById('master-items-json').textContent    || '[]'); } catch (e) { masterItems = []; }
 
   let existingRooms = [];
   try { existingRooms = JSON.parse(document.getElementById('existing-rooms-data').textContent || '[]'); }
@@ -198,10 +200,9 @@ document.addEventListener('DOMContentLoaded', () => {
     existingRooms.forEach(rd => {
       const rk = addRoom(rd.name);
       (rd.items || []).forEach(id => {
-        // Convert stored decimal back to ft+in for display
         const lFtIn = decimalToFtIn(id.length);
         const wFtIn = decimalToFtIn(id.width);
-        addItem(rk, id.name, lFtIn.ft, lFtIn.inch, wFtIn.ft, wFtIn.inch, id.wood_type);
+        addItem(rk, id.name, lFtIn.ft, lFtIn.inch, wFtIn.ft, wFtIn.inch, id.wood_type, id.work_type);
       });
     });
   }
@@ -214,6 +215,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', scheduleDraftSave);
   });
+
+  // Restore discount state from hidden fields (edit mode)
+  const savedType  = (document.getElementById('discount_type_field')  || {}).value || 'none';
+  const savedValue = (document.getElementById('discount_value_field') || {}).value || '0';
+  const dtypeEl = document.getElementById('discount_type_select');
+  const dvalEl  = document.getElementById('discount_value_input');
+  if (dtypeEl && savedType !== 'none') {
+    dtypeEl.value = savedType;
+    if (dvalEl) { dvalEl.value = savedValue; dvalEl.style.display = 'block'; }
+  }
+
+  // Wire up modal item name autocomplete
+  const modalNameEl = document.getElementById('modal_item_name');
+  if (modalNameEl) initAutocomplete(modalNameEl, masterItems);
+
+  // Allow pressing Enter in modal fields to save
+  const itemModalEl = document.getElementById('itemModal');
+  if (itemModalEl) {
+    itemModalEl.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') {
+        e.preventDefault();
+        saveItemFromModal();
+      }
+    });
+  }
 });
 
 // ─── Room Management ──────────────────────────────────────────────────────────
@@ -251,6 +277,7 @@ function addRoom(presetName) {
               <th style="min-width:155px">Length</th>
               <th style="min-width:155px">Width</th>
               <th style="min-width:120px">Wood Type</th>
+              <th style="min-width:120px">Work Type</th>
               <th style="min-width:80px">Area (sqft)</th>
               <th style="width:36px"></th>
             </tr>
@@ -268,7 +295,6 @@ function addRoom(presetName) {
   const roomNameEl = document.getElementById('room_name_' + rk);
   if (roomNameEl) initAutocomplete(roomNameEl, masterRooms);
   updateNoRoomsHint();
-  if (!presetName) addItem(rk);
   return rk;
 }
 
@@ -289,18 +315,84 @@ function onRoomNameChange(rk, val) {
 
 // ─── Item Management ──────────────────────────────────────────────────────────
 let itemCounter = 0;
+let _modalRoomKey = null;
 
-function addItem(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood) {
+// Public: called by "Add Item" button — opens modal for user entry.
+// Also called internally with preset values when loading existing data.
+function addItem(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork) {
+  if (presetName === undefined && presetLFt === undefined) {
+    // User clicked "Add Item" — open modal
+    openItemModal(rk);
+    return;
+  }
+  _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork);
+}
+
+function openItemModal(rk) {
+  _modalRoomKey = rk;
+  const nameEl = document.getElementById('modal_item_name');
+  if (nameEl) { nameEl.value = ''; nameEl.classList.remove('is-invalid'); }
+  ['modal_item_lft','modal_item_lin','modal_item_wft','modal_item_win'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const woodEl = document.getElementById('modal_item_wood');
+  const workEl = document.getElementById('modal_item_work');
+  if (woodEl) woodEl.value = 'Laminates';
+  if (workEl) workEl.value = 'Box Work';
+  const areaEl = document.getElementById('modal_item_area');
+  if (areaEl) areaEl.textContent = '0.00';
+  const modal = new bootstrap.Modal(document.getElementById('itemModal'));
+  modal.show();
+  setTimeout(() => { if (nameEl) nameEl.focus(); }, 350);
+}
+
+function modalCalcArea() {
+  const lFt  = parseFloat(document.getElementById('modal_item_lft')?.value) || 0;
+  const lIn  = parseFloat(document.getElementById('modal_item_lin')?.value) || 0;
+  const wFt  = parseFloat(document.getElementById('modal_item_wft')?.value) || 0;
+  const wIn  = parseFloat(document.getElementById('modal_item_win')?.value) || 0;
+  // clamp inches
+  if (lIn > 11) document.getElementById('modal_item_lin').value = 11;
+  if (wIn > 11) document.getElementById('modal_item_win').value = 11;
+  const area = ftInToDecimal(lFt, lIn) * ftInToDecimal(wFt, wIn);
+  const el = document.getElementById('modal_item_area');
+  if (el) el.textContent = area.toFixed(2);
+}
+
+function saveItemFromModal() {
+  const nameEl = document.getElementById('modal_item_name');
+  const name   = nameEl?.value.trim() || '';
+  if (!name) { if (nameEl) nameEl.classList.add('is-invalid'); return; }
+  if (nameEl) nameEl.classList.remove('is-invalid');
+
+  const lFt  = parseFloat(document.getElementById('modal_item_lft')?.value) || 0;
+  const lIn  = parseFloat(document.getElementById('modal_item_lin')?.value) || 0;
+  const wFt  = parseFloat(document.getElementById('modal_item_wft')?.value) || 0;
+  const wIn  = parseFloat(document.getElementById('modal_item_win')?.value) || 0;
+  const wood = document.getElementById('modal_item_wood')?.value || 'Laminates';
+  const work = document.getElementById('modal_item_work')?.value || 'Box Work';
+
+  _insertItemRow(_modalRoomKey, name, lFt, lIn, wFt, wIn, wood, work);
+
+  const modalEl = document.getElementById('itemModal');
+  const instance = bootstrap.Modal.getInstance(modalEl);
+  if (instance) instance.hide();
+}
+
+// Internal: inserts an item row directly into the table (used when loading
+// existing data and after modal save).
+function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, presetWood, presetWork) {
   itemCounter++;
   const ik = 'item_' + itemCounter;
   if (!rooms[rk]) return;
 
-  const lFt   = presetLFt  !== undefined ? presetLFt  : '';
-  const lIn   = presetLIn  !== undefined ? presetLIn  : '';
-  const wFt   = presetWFt  !== undefined ? presetWFt  : '';
-  const wIn   = presetWIn  !== undefined ? presetWIn  : '';
-  const wood  = presetWood || 'Laminates';
-  const name  = presetName || '';
+  const lFt  = presetLFt  !== undefined ? presetLFt  : '';
+  const lIn  = presetLIn  !== undefined ? presetLIn  : '';
+  const wFt  = presetWFt  !== undefined ? presetWFt  : '';
+  const wIn  = presetWIn  !== undefined ? presetWIn  : '';
+  const wood = presetWood || 'Laminates';
+  const work = presetWork || 'Box Work';
+  const name = presetName || '';
 
   const lDec = ftInToDecimal(lFt, lIn);
   const wDec = ftInToDecimal(wFt, wIn);
@@ -308,7 +400,7 @@ function addItem(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, pre
 
   rooms[rk].items[ik] = {
     name, lengthFt: lFt, lengthIn: lIn, widthFt: wFt, widthIn: wIn,
-    wood_type: wood, area
+    wood_type: wood, work_type: work, area
   };
 
   const tbody = document.getElementById('items_tbody_' + rk);
@@ -361,6 +453,13 @@ function addItem(rk, presetName, presetLFt, presetLIn, presetWFt, presetWIn, pre
         ${buildWoodOptions(wood)}
       </select>
     </td>
+    <td>
+      <select class="form-select form-select-sm"
+              id="item_work_${ik}"
+              onchange="onItemField('${rk}','${ik}')">
+        ${buildWorkTypeOptions(work)}
+      </select>
+    </td>
     <td class="text-center">
       <span class="area-display fw-bold text-primary" id="item_area_${ik}">
         ${area > 0 ? area.toFixed(2) : '0.00'}
@@ -400,6 +499,7 @@ function onItemField(rk, ik) {
   const wFtEl  = document.getElementById('item_wft_'  + ik);
   const wInEl  = document.getElementById('item_win_'  + ik);
   const woodEl = document.getElementById('item_wood_' + ik);
+  const workEl = document.getElementById('item_work_' + ik);
   const areaEl = document.getElementById('item_area_' + ik);
 
   // Clamp inches 0–11
@@ -420,6 +520,7 @@ function onItemField(rk, ik) {
     lengthFt:  lFt, lengthIn: lIn,
     widthFt:   wFt, widthIn:  wIn,
     wood_type: woodEl?.value || 'Laminates',
+    work_type: workEl?.value || 'Box Work',
     area
   };
 
@@ -430,6 +531,7 @@ function onItemField(rk, ik) {
 // ─── Calculations ─────────────────────────────────────────────────────────────
 function recalcAll() {
   const woodAreas = {};
+  const workAreas = {};
 
   Object.entries(rooms).forEach(([rk, room]) => {
     let roomArea = 0;
@@ -437,29 +539,81 @@ function recalcAll() {
       const a = item.area || 0;
       roomArea += a;
       woodAreas[item.wood_type] = (woodAreas[item.wood_type] || 0) + a;
+      workAreas[item.work_type] = (workAreas[item.work_type] || 0) + a;
     });
     const badge = document.getElementById('room_total_badge_' + rk);
     if (badge) badge.textContent = roomArea.toFixed(2) + ' sqft';
   });
 
   let grandTotal = 0;
-  Object.entries(woodAreas).forEach(([wt, area]) => {
-    grandTotal += area * (woodRates[wt] || 0);
-  });
+  Object.entries(woodAreas).forEach(([wt, area]) => { grandTotal += area * (woodRates[wt] || 0); });
+  Object.entries(workAreas).forEach(([wt, area]) => { grandTotal += area * (workTypeRates[wt] || 0); });
 
-  renderSummary(woodAreas, grandTotal);
+  renderSummary(woodAreas, workAreas, grandTotal);
 
   const fmt = '₹' + grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const gtEl  = document.getElementById('grand-total-display');
-  const gtMob = document.getElementById('grand-total-mobile');
-  if (gtEl)  gtEl.textContent  = fmt;
-  if (gtMob) gtMob.textContent = fmt;
+  const gtEl = document.getElementById('grand-total-display');
+  if (gtEl) gtEl.textContent = fmt;
+
+  _updateFinalTotal(grandTotal);
 
   // Auto-save draft whenever the cost summary recalculates (room/item change)
   scheduleDraftSave();
 }
 
-function renderSummary(woodAreas, grandTotal) {
+function _updateFinalTotal(grandTotal) {
+  const typeEl  = document.getElementById('discount_type_select');
+  const valEl   = document.getElementById('discount_value_input');
+  const rowEl   = document.getElementById('discount_row');
+  const discEl  = document.getElementById('discount-amount-display');
+  const finalEl = document.getElementById('final-total-display');
+  const mobEl   = document.getElementById('final-total-mobile');
+  const typeField = document.getElementById('discount_type_field');
+  const valField  = document.getElementById('discount_value_field');
+
+  const dtype = typeEl ? typeEl.value : 'none';
+  const dval  = parseFloat(valEl ? valEl.value : 0) || 0;
+
+  let discountAmount = 0;
+  if (dtype === 'percentage') {
+    discountAmount = grandTotal * dval / 100;
+  } else if (dtype === 'fixed') {
+    discountAmount = Math.min(dval, grandTotal);
+  }
+  discountAmount = Math.max(0, discountAmount);
+  const finalTotal = Math.max(0, grandTotal - discountAmount);
+
+  // Show/hide discount row
+  if (rowEl) rowEl.style.display = (dtype !== 'none' && dval > 0) ? 'flex' : 'none';
+  if (discEl) discEl.textContent = '- ₹' + discountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const finalFmt = '₹' + finalTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (finalEl) finalEl.textContent = finalFmt;
+  if (mobEl)   mobEl.textContent   = finalFmt;
+
+  // Sync hidden form fields
+  if (typeField) typeField.value = dtype;
+  if (valField)  valField.value  = dval;
+}
+
+function onDiscountChange() {
+  const typeEl = document.getElementById('discount_type_select');
+  const valEl  = document.getElementById('discount_value_input');
+  const dtype  = typeEl ? typeEl.value : 'none';
+
+  // Show input only when a discount type is selected
+  if (valEl) valEl.style.display = dtype !== 'none' ? 'block' : 'none';
+
+  // Recalc with current grand total
+  const gtEl = document.getElementById('grand-total-display');
+  let grandTotal = 0;
+  if (gtEl) {
+    grandTotal = parseFloat(gtEl.textContent.replace(/[₹,]/g, '')) || 0;
+  }
+  _updateFinalTotal(grandTotal);
+}
+
+function renderSummary(woodAreas, workAreas, grandTotal) {
   const panel = document.getElementById('summary-content');
   if (!panel) return;
   const hasData = Object.values(woodAreas).some(a => a > 0);
@@ -472,19 +626,36 @@ function renderSummary(woodAreas, grandTotal) {
     'Laminates': { bg:'#dcfce7', color:'#166534' },
     'Veneer':    { bg:'#ffedd5', color:'#9a3412' },
   };
-  let html = '';
+  const workColors = {
+    'Box Work':   { bg:'#ede9fe', color:'#5b21b6' },
+    'Frame Work': { bg:'#fef3c7', color:'#92400e' },
+  };
+  let html = '<div class="small fw-semibold text-muted mb-1">Material Cost</div>';
   Object.entries(woodAreas).forEach(([wt, area]) => {
     if (area <= 0) return;
-    const rate     = woodRates[wt] || 0;
-    const subtotal = area * rate;
-    const c        = woodColors[wt] || { bg:'#f3f4f6', color:'#374151' };
+    const rate = woodRates[wt] || 0;
+    const c    = woodColors[wt] || { bg:'#f3f4f6', color:'#374151' };
     html += `
       <div class="summary-wood-row">
         <span class="summary-wood-label">
           <span class="badge me-1" style="background:${c.bg};color:${c.color}">${wt}</span>
         </span>
         <span class="text-muted small">${area.toFixed(2)} sqft</span>
-        <span class="summary-wood-value">₹${subtotal.toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+        <span class="summary-wood-value">₹${(area*rate).toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+      </div>`;
+  });
+  html += '<div class="small fw-semibold text-muted mb-1 mt-2">Work Cost</div>';
+  Object.entries(workAreas).forEach(([wt, area]) => {
+    if (area <= 0) return;
+    const rate = workTypeRates[wt] || 0;
+    const c    = workColors[wt] || { bg:'#f3f4f6', color:'#374151' };
+    html += `
+      <div class="summary-wood-row">
+        <span class="summary-wood-label">
+          <span class="badge me-1" style="background:${c.bg};color:${c.color}">${wt}</span>
+        </span>
+        <span class="text-muted small">${area.toFixed(2)} sqft</span>
+        <span class="summary-wood-value">₹${(area*rate).toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
       </div>`;
   });
   panel.innerHTML = html;
@@ -516,9 +687,10 @@ function validateAndSubmit() {
       if (!item.name || lDec <= 0 || wDec <= 0) return;
       itemsPayload.push({
         name:      item.name,
-        length:    lDec,               // decimal feet stored in DB
-        width:     wDec,               // decimal feet stored in DB
+        length:    lDec,
+        width:     wDec,
         wood_type: item.wood_type,
+        work_type: item.work_type,
         area:      item.area || parseFloat((lDec * wDec).toFixed(4))
       });
       hasItem = true;
@@ -540,6 +712,12 @@ function validateAndSubmit() {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function buildWoodOptions(selected) {
   return ['Acrylic','Laminates','Veneer']
+    .map(t => `<option value="${t}" ${t === selected ? 'selected' : ''}>${t}</option>`)
+    .join('');
+}
+
+function buildWorkTypeOptions(selected) {
+  return ['Box Work','Frame Work']
     .map(t => `<option value="${t}" ${t === selected ? 'selected' : ''}>${t}</option>`)
     .join('');
 }

@@ -8,6 +8,7 @@ from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 WOOD_TYPES = ['Acrylic', 'Laminates', 'Veneer']
+WORK_TYPES = ['Box Work', 'Frame Work']
 
 
 def ft_in(decimal_ft):
@@ -86,7 +87,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     )
 
     # -------  HEADER -------
-    elements.append(Paragraph("Kundan's Interiors", title_style))
+    elements.append(Paragraph("Kundann Interiors", title_style))
     elements.append(Paragraph("Premium Interior Design & Furnishing Solutions", subtitle_style))
     elements.append(HRFlowable(width='100%', thickness=2, color=BRAND_ACCENT, spaceAfter=8))
 
@@ -147,9 +148,13 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     elements.append(Paragraph("Room-by-Room Breakdown", section_style))
     elements.append(Spacer(1, 6))
 
-    item_col_widths = ['25%', '13%', '13%', '15%', '18%', '16%']
+    item_col_widths = ['22%', '11%', '11%', '14%', '14%', '14%', '14%']
     page_width = A4[0] - 3 * cm
     col_widths = [page_width * float(p.strip('%')) / 100 for p in item_col_widths]
+
+    from .models import WoodRate as _WoodRate, WorkTypeRate as _WorkTypeRate
+    _wood_rates_map = {r.wood_type: r.rate_per_sqft for r in _WoodRate.query.all()}
+    _work_rates_map = {r.work_type: r.rate_per_sqft for r in _WorkTypeRate.query.all()}
 
     for room in project.rooms.all():
         # Room header row
@@ -169,20 +174,27 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         elements.append(room_header)
 
         # Items table
-        item_rows = [['Item Name', 'Length', 'Width', 'Wood Type', 'Area (sqft)', 'Subtotal (Rs.)']]
+        item_rows = [['Item Name', 'Length', 'Width', 'Wood Type', 'Work Type', 'Area (sqft)', 'Subtotal (Rs.)']]
         room_total_area = 0.0
+        room_total_cost = 0.0
         for item in room.items.all():
+            work_type  = getattr(item, 'work_type', 'Box Work')
+            wood_rate  = _wood_rates_map.get(item.wood_type, 0.0)
+            work_rate  = _work_rates_map.get(work_type, 0.0)
+            subtotal   = item.area * (wood_rate + work_rate)
             room_total_area += item.area
+            room_total_cost += subtotal
             item_rows.append([
                 item.name,
                 ft_in(item.length),
                 ft_in(item.width),
                 item.wood_type,
+                work_type,
                 f'{item.area:.2f}',
-                '—'
+                f'{subtotal:,.2f}'
             ])
         # Room total row
-        item_rows.append(['', '', '', 'Room Total Area:', f'{room_total_area:.2f} sqft', ''])
+        item_rows.append(['', '', '', '', 'Room Total:', f'{room_total_area:.2f} sqft', f'Rs. {room_total_cost:,.2f}'])
 
         item_table = Table(item_rows, colWidths=col_widths)
         item_table.setStyle(TableStyle([
@@ -197,13 +209,15 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             ('FONTSIZE', (0, 1), (-1, -1), 8),
             ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
             ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+            ('ALIGN', (6, 1), (6, -1), 'RIGHT'),
             # Alternating row colors
             ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#fafafa')]),
             # Total row
             ('BACKGROUND', (0, -1), (-1, -1), BRAND_LIGHT),
-            ('FONTNAME', (3, -1), (4, -1), 'Helvetica-Bold'),
-            ('TEXTCOLOR', (3, -1), (4, -1), BRAND_DARK),
-            ('ALIGN', (3, -1), (4, -1), 'CENTER'),
+            ('FONTNAME', (4, -1), (-1, -1), 'Helvetica-Bold'),
+            ('TEXTCOLOR', (4, -1), (-1, -1), BRAND_DARK),
+            ('ALIGN', (4, -1), (5, -1), 'CENTER'),
+            ('ALIGN', (6, -1), (6, -1), 'RIGHT'),
             # Grid
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
             ('LINEBELOW', (0, 0), (-1, 0), 1, BRAND_DARK),
@@ -214,58 +228,135 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         elements.append(item_table)
         elements.append(Spacer(1, 8))
 
-    # ------- WOOD TYPE SUMMARY -------
+    # ------- COST SUMMARY -------
     elements.append(Spacer(1, 6))
     elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
-    elements.append(Paragraph("Material Cost Summary", section_style))
+    elements.append(Paragraph("Cost Summary", section_style))
     elements.append(Spacer(1, 6))
 
-    from .models import WoodRate
-    rates = {r.wood_type: r.rate_per_sqft for r in WoodRate.query.all()}
+    wood_rates = _wood_rates_map
+    work_rates = _work_rates_map
     wood_totals = project.get_wood_totals()
+    work_totals = project.get_work_totals()
 
-    summary_data = [['Material', 'Total Area (sqft)', 'Rate (Rs./sqft)', 'Amount (Rs.)']]
-    grand_total = 0.0
+    summary_cw = [page_width * p for p in [0.30, 0.25, 0.25, 0.20]]
+
+    # Material cost sub-table
+    elements.append(Paragraph("Material (Wood Type)", ParagraphStyle(
+        'SubSection', parent=styles['Normal'], fontSize=9,
+        fontName='Helvetica-Bold', textColor=colors.HexColor('#283593')
+    )))
+    elements.append(Spacer(1, 3))
+    mat_data = [['Material', 'Total Area (sqft)', 'Rate (Rs./sqft)', 'Amount (Rs.)']]
+    mat_total = 0.0
     for wt in WOOD_TYPES:
         area = wood_totals.get(wt, 0.0)
         if area > 0:
-            rate = rates.get(wt, 0.0)
+            rate = wood_rates.get(wt, 0.0)
             subtotal = area * rate
-            grand_total += subtotal
-            summary_data.append([
-                wt,
-                f'{area:,.2f}',
-                f'{rate:,.0f}',
-                f'{subtotal:,.2f}'
-            ])
-    summary_data.append(['', '', 'GRAND TOTAL', f'Rs. {project.grand_total:,.2f}'])
+            mat_total += subtotal
+            mat_data.append([wt, f'{area:,.2f}', f'{rate:,.0f}', f'{subtotal:,.2f}'])
+    mat_data.append(['', '', 'Material Subtotal', f'Rs. {mat_total:,.2f}'])
 
-    summary_cw = [page_width * p for p in [0.30, 0.25, 0.25, 0.20]]
-    summary_table = Table(summary_data, colWidths=summary_cw)
-    summary_table.setStyle(TableStyle([
-        # Header
+    mat_table = Table(mat_data, colWidths=summary_cw)
+    mat_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 9),
-        # Data rows
         ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -2), 9),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
         ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, BRAND_LIGHT]),
-        # Grand total row
-        ('BACKGROUND', (0, -1), (-1, -1), BRAND_DARK),
-        ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e8eaf6')),
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, -1), (-1, -1), 11),
-        # Alignment
+        ('TEXTCOLOR', (2, -1), (-1, -1), BRAND_DARK),
         ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
         ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-        ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor('#e0e0e0')),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
         ('PADDING', (0, 0), (-1, -1), 7),
-        ('TOPPADDING', (0, 0), (-1, -1), 8),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
     ]))
-    elements.append(summary_table)
+    elements.append(mat_table)
+    elements.append(Spacer(1, 8))
+
+    # Work type cost sub-table
+    elements.append(Paragraph("Work Type", ParagraphStyle(
+        'SubSection2', parent=styles['Normal'], fontSize=9,
+        fontName='Helvetica-Bold', textColor=colors.HexColor('#7c3aed')
+    )))
+    elements.append(Spacer(1, 3))
+    work_data = [['Work Type', 'Total Area (sqft)', 'Rate (Rs./sqft)', 'Amount (Rs.)']]
+    work_total = 0.0
+    for wt in WORK_TYPES:
+        area = work_totals.get(wt, 0.0)
+        if area > 0:
+            rate = work_rates.get(wt, 0.0)
+            subtotal = area * rate
+            work_total += subtotal
+            work_data.append([wt, f'{area:,.2f}', f'{rate:,.0f}', f'{subtotal:,.2f}'])
+    work_data.append(['', '', 'Work Subtotal', f'Rs. {work_total:,.2f}'])
+
+    work_table = Table(work_data, colWidths=summary_cw)
+    WORK_HEADER_BG = colors.HexColor('#5b21b6')
+    work_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), WORK_HEADER_BG),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#ede9fe')]),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#ede9fe')),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('TEXTCOLOR', (2, -1), (-1, -1), colors.HexColor('#5b21b6')),
+        ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
+        ('PADDING', (0, 0), (-1, -1), 7),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(work_table)
+    elements.append(Spacer(1, 8))
+
+    # Discount + Final total rows
+    discount_amount = getattr(project, 'discount_amount', 0.0)
+    final_total     = getattr(project, 'final_total',     project.grand_total)
+    total_rows = []
+    total_style_cmds = []
+
+    if discount_amount > 0:
+        dtype = getattr(project, 'discount_type', 'none')
+        dval  = getattr(project, 'discount_value', 0) or 0
+        disc_label = f'Discount ({dval:.0f}%)' if dtype == 'percentage' else 'Discount (Fixed)'
+        total_rows.append(['', '', disc_label, f'- Rs. {discount_amount:,.2f}'])
+        total_style_cmds += [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#fef2f2')),
+            ('TEXTCOLOR', (2, 0), (-1, 0), colors.HexColor('#b91c1c')),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('ALIGN', (2, 0), (-1, 0), 'RIGHT'),
+            ('PADDING', (0, 0), (-1, 0), 7),
+        ]
+
+    fi = len(total_rows)
+    total_rows.append(['', '', 'FINAL TOTAL', f'Rs. {final_total:,.2f}'])
+    total_style_cmds += [
+        ('BACKGROUND', (0, fi), (-1, fi), BRAND_DARK),
+        ('TEXTCOLOR', (0, fi), (-1, fi), colors.white),
+        ('FONTNAME', (0, fi), (-1, fi), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, fi), (-1, fi), 12),
+        ('ALIGN', (0, fi), (1, fi), 'LEFT'),
+        ('ALIGN', (2, fi), (-1, fi), 'RIGHT'),
+        ('PADDING', (0, fi), (-1, fi), 9),
+        ('TOPPADDING', (0, fi), (-1, fi), 10),
+        ('BOTTOMPADDING', (0, fi), (-1, fi), 10),
+    ]
+
+    grand_total_table = Table(total_rows, colWidths=summary_cw)
+    grand_total_table.setStyle(TableStyle(total_style_cmds))
+    elements.append(grand_total_table)
     elements.append(Spacer(1, 20))
 
     # ------- TERMS & CONDITIONS -------
@@ -284,7 +375,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         elements.append(Paragraph(term, tc_style))
     elements.append(Spacer(1, 8))
     elements.append(Paragraph(
-        "Thank you for choosing <b>Kundan's Interiors</b>. We look forward to transforming your space!",
+        "Thank you for choosing <b>Kundann Interiors</b>. We look forward to transforming your space!",
         ParagraphStyle('Footer', parent=styles['Normal'],
                        fontSize=9, textColor=BRAND_DARK, alignment=TA_CENTER)
     ))

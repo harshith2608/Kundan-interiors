@@ -34,7 +34,9 @@ class Project(db.Model):
     email = db.Column(db.String(100), nullable=True)
     address = db.Column(db.Text, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    grand_total = db.Column(db.Float, default=0.0)
+    grand_total    = db.Column(db.Float, default=0.0)
+    discount_type  = db.Column(db.String(20), default='none')   # 'none', 'percentage', 'fixed'
+    discount_value = db.Column(db.Float, default=0.0)
     status = db.Column(db.String(20), default='complete', nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -48,6 +50,26 @@ class Project(db.Model):
             for item in room.items:
                 totals[item.wood_type] = totals.get(item.wood_type, 0.0) + item.area
         return totals
+
+    def get_work_totals(self):
+        """Returns dict of {work_type: total_area}"""
+        totals = {}
+        for room in self.rooms:
+            for item in room.items:
+                totals[item.work_type] = totals.get(item.work_type, 0.0) + item.area
+        return totals
+
+    @property
+    def discount_amount(self):
+        if self.discount_type == 'percentage':
+            return round(self.grand_total * (self.discount_value or 0) / 100, 2)
+        elif self.discount_type == 'fixed':
+            return round(min(self.discount_value or 0, self.grand_total), 2)
+        return 0.0
+
+    @property
+    def final_total(self):
+        return round(max(self.grand_total - self.discount_amount, 0), 2)
 
     def __repr__(self):
         return f'<Project {self.id}: {self.customer_name}>'
@@ -78,6 +100,7 @@ class Item(db.Model):
     width = db.Column(db.Float, nullable=False)
     area = db.Column(db.Float, nullable=False)
     wood_type = db.Column(db.String(50), nullable=False)
+    work_type = db.Column(db.String(50), nullable=False, default='Box Work')
 
     def __repr__(self):
         return f'<Item {self.name}>'
@@ -109,6 +132,16 @@ class WoodRate(db.Model):
 
     def __repr__(self):
         return f'<WoodRate {self.wood_type}: {self.rate_per_sqft}>'
+
+
+class WorkTypeRate(db.Model):
+    __tablename__ = 'work_type_rates'
+    id = db.Column(db.Integer, primary_key=True)
+    work_type = db.Column(db.String(50), unique=True, nullable=False)
+    rate_per_sqft = db.Column(db.Float, nullable=False)
+
+    def __repr__(self):
+        return f'<WorkTypeRate {self.work_type}: {self.rate_per_sqft}>'
 
 
 class ProjectAccess(db.Model):

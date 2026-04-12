@@ -71,7 +71,7 @@ def create_app(config_name='default'):
 
 
 def _seed_database():
-    from .models import User, WoodRate, MasterRoom, MasterItem
+    from .models import User, WoodRate, WorkTypeRate, MasterRoom, MasterItem
     from werkzeug.security import generate_password_hash
 
     # Create default admin if none exists
@@ -92,6 +92,15 @@ def _seed_database():
             WoodRate(wood_type='Veneer', rate_per_sqft=1500.0),
         ]
         db.session.bulk_save_objects(rates)
+        db.session.commit()
+
+    # Seed work type rates if empty
+    if not WorkTypeRate.query.first():
+        work_rates = [
+            WorkTypeRate(work_type='Box Work',   rate_per_sqft=500.0),
+            WorkTypeRate(work_type='Frame Work', rate_per_sqft=300.0),
+        ]
+        db.session.bulk_save_objects(work_rates)
         db.session.commit()
 
     # Seed master rooms if empty

@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from werkzeug.security import generate_password_hash
 from sqlalchemy import func
 from . import db
-from .models import User, Project, Item, Room, WoodRate, MasterRoom, MasterItem, AppSetting, Notification
+from .models import User, Project, Item, Room, WoodRate, WorkTypeRate, MasterRoom, MasterItem, AppSetting, Notification
 from .forms import CreateUserForm, WoodRateForm, ChangePasswordForm
 from .decorators import admin_required
 
@@ -158,31 +158,52 @@ def change_user_password(user_id):
 @admin_bp.route('/rates', methods=['GET', 'POST'])
 def rates():
     form = WoodRateForm()
-    wood_rates = {r.wood_type: r for r in WoodRate.query.all()}
+    wood_rates      = {r.wood_type: r for r in WoodRate.query.all()}
+    work_type_rates = {r.work_type: r for r in WorkTypeRate.query.all()}
 
-    if form.validate_on_submit():
-        updates = {
-            'Acrylic': form.acrylic_rate.data,
-            'Laminates': form.laminates_rate.data,
-            'Veneer': form.veneer_rate.data,
-        }
-        for wt, rate in updates.items():
-            wr = wood_rates.get(wt)
-            if wr:
-                wr.rate_per_sqft = rate
-            else:
-                db.session.add(WoodRate(wood_type=wt, rate_per_sqft=rate))
-        db.session.commit()
-        flash('Wood rates updated successfully.', 'success')
-        return redirect(url_for('admin.rates'))
+    if request.method == 'POST':
+        if 'wood_submit' in request.form and form.validate_on_submit():
+            updates = {
+                'Acrylic':   form.acrylic_rate.data,
+                'Laminates': form.laminates_rate.data,
+                'Veneer':    form.veneer_rate.data,
+            }
+            for wt, rate in updates.items():
+                wr = wood_rates.get(wt)
+                if wr:
+                    wr.rate_per_sqft = rate
+                else:
+                    db.session.add(WoodRate(wood_type=wt, rate_per_sqft=rate))
+            db.session.commit()
+            flash('Wood rates updated successfully.', 'success')
+            return redirect(url_for('admin.rates'))
+
+        elif 'work_submit' in request.form:
+            for wt in ['Box Work', 'Frame Work']:
+                field_key = wt.lower().replace(' ', '_') + '_rate'
+                try:
+                    rate = float(request.form.get(field_key, 0))
+                except (ValueError, TypeError):
+                    rate = 0
+                if rate < 0:
+                    rate = 0
+                wr = work_type_rates.get(wt)
+                if wr:
+                    wr.rate_per_sqft = rate
+                else:
+                    db.session.add(WorkTypeRate(work_type=wt, rate_per_sqft=rate))
+            db.session.commit()
+            flash('Work type rates updated successfully.', 'success')
+            return redirect(url_for('admin.rates'))
 
     if wood_rates:
-        form.acrylic_rate.data = wood_rates.get('Acrylic', WoodRate()).rate_per_sqft
+        form.acrylic_rate.data   = wood_rates.get('Acrylic',   WoodRate()).rate_per_sqft
         form.laminates_rate.data = wood_rates.get('Laminates', WoodRate()).rate_per_sqft
-        form.veneer_rate.data = wood_rates.get('Veneer', WoodRate()).rate_per_sqft
+        form.veneer_rate.data    = wood_rates.get('Veneer',     WoodRate()).rate_per_sqft
 
     return render_template('admin/rates.html', title='Manage Rates',
-                           form=form, wood_rates=wood_rates)
+                           form=form, wood_rates=wood_rates,
+                           work_type_rates=work_type_rates)
 
 
 @admin_bp.route('/payment-settings', methods=['GET', 'POST'])
