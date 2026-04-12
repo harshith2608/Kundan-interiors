@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: kundann-interiors
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn run:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true        # Render auto-generates a secure value
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kundann-interiors-db
+          property: connectionString
+
+databases:
+  - name: kundann-interiors-db
+    databaseName: kundann_interiors
+    plan: free

@@ -3,6 +3,7 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
+from whitenoise import WhiteNoise
 from config import config
 
 db = SQLAlchemy()
@@ -33,6 +34,9 @@ def create_app(config_name='default'):
     app.register_blueprint(projects_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(api_bp)
+
+    # Serve static files efficiently in production (Gunicorn doesn't serve them)
+    app.wsgi_app = WhiteNoise(app.wsgi_app, root='static/', prefix='static')
 
     # Razorpay webhook is called by Razorpay servers — exempt from CSRF
     from .projects import razorpay_webhook
