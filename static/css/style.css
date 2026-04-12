@@ -213,6 +213,7 @@ body {
   box-shadow: 0 -2px 12px rgba(0,0,0,0.1);
 }
 
+
 /* ---- Empty State ---- */
 .ki-empty-state { padding: 40px 20px; }
 
@@ -233,31 +234,6 @@ main { padding-bottom: 60px; }
   main { padding-bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
 }
 
-/* ---- Custom Autocomplete ---- */
-.ki-ac-dropdown {
-  position: fixed;   /* body-level — never clipped by table or overflow:hidden */
-  z-index: 9999;
-  background: #fff;
-  border: 1px solid #c5cae9;
-  border-top: none;
-  border-radius: 0 0 8px 8px;
-  box-shadow: 0 6px 16px rgba(26,35,126,0.13);
-  max-height: 220px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;  /* smooth momentum scroll on iOS */
-  display: none;
-}
-.ki-ac-dropdown li {
-  padding: 11px 14px;
-  cursor: pointer;
-  font-size: 0.875rem;
-  list-style: none;
-  border-bottom: 1px solid #f0f0f0;
-  color: var(--ki-text);
-}
-.ki-ac-dropdown li:last-child { border-bottom: none; }
-.ki-ac-dropdown li:hover,
-.ki-ac-dropdown li.active { background: var(--ki-light); color: var(--ki-primary); font-weight: 600; }
 
 /* ---- Responsive tweaks ---- */
 @media (max-width: 575px) {
@@ -271,6 +247,47 @@ main { padding-bottom: 60px; }
   .item-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .summary-panel { position: static; }
 }
+
+/* ---- Custom Autocomplete ---- */
+/* .ki-ac-wrap is a plain wrapper (no overflow constraints needed now) */
+.ki-ac-wrap { display: block; }
+/* Dropdown is appended to <body> with inline position:absolute — only visual
+   styles are needed here. z-index is set inline (9999). */
+.ki-ac-dropdown {
+  background: #fff;
+  border: 1px solid var(--ki-border);
+  border-radius: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 4px 0;
+  /* Prevent iOS long-press callout on the whole dropdown */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  /* Larger tap targets feel more native */
+  -webkit-tap-highlight-color: transparent;
+}
+.ki-ac-dropdown li {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  border-bottom: 1px solid #f0f0f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Prevent iOS long-press callout (Paste / Autofill menu) */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  /* Removes 300ms tap delay and suppresses long-press behaviour */
+  touch-action: manipulation;
+}
+.ki-ac-dropdown li:last-child { border-bottom: none; }
+.ki-ac-dropdown li:hover,
+.ki-ac-dropdown li:active { background: var(--ki-light); color: var(--ki-primary); font-weight: 600; }
 
 /* ---- Scrollbar styling (webkit) ---- */
 ::-webkit-scrollbar { width: 6px; height: 6px; }

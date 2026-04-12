@@ -6,7 +6,9 @@
   .room-card { border-left: 4px solid #3949ab; }
   .room-card .card-header { background: #e8eaf6; color: #1a237e; font-weight: 600; }
   .item-row td { vertical-align: middle; }
-  .summary-panel { position: sticky; top: 70px; }
+  @media (min-width: 992px) {
+    .summary-panel { position: sticky; top: 70px; }
+  }
   .wood-badge-acrylic  { background:#e3f2fd; color:#0d47a1; }
   .wood-badge-laminates{ background:#e8f5e9; color:#1b5e20; }
   .wood-badge-veneer   { background:#fff3e0; color:#e65100; }
@@ -39,9 +41,13 @@
 <script id="work-type-rates-data" type="application/json">{{ work_type_rates | tojson }}</script>
 <!-- Existing rooms data for edit mode -->
 <script id="existing-rooms-data" type="application/json">{{ rooms_json | safe }}</script>
-<!-- Master lists for custom autocomplete -->
-<script id="master-rooms-json" type="application/json">{{ master_rooms | tojson }}</script>
-<script id="master-items-json" type="application/json">{{ master_items | tojson }}</script>
+<!-- Native datalists for room/item name suggestions -->
+<datalist id="master-rooms-list">
+  {% for r in master_rooms %}<option value="{{ r }}">{% endfor %}
+</datalist>
+<datalist id="master-items-list">
+  {% for i in master_items %}<option value="{{ i }}">{% endfor %}
+</datalist>
 
 <form id="projectForm" method="POST"
       action="{{ url_for('projects.edit_project', project_id=project.id) if project else url_for('projects.create_project') }}"
@@ -141,7 +147,8 @@
 
     <!-- RIGHT: Live Summary -->
     <div class="col-12 col-lg-4">
-      <div class="card shadow-sm border-0 summary-panel">
+      <div class="summary-panel">
+      <div class="card shadow-sm border-0">
         <div class="card-header ki-card-header">
           <i class="bi bi-calculator me-2"></i>Live Cost Summary
         </div>
@@ -196,7 +203,7 @@
       </div>
 
       <!-- Rates Reference -->
-      <div class="card shadow-sm border-0 mt-3">
+      <div class="card shadow-sm border-0 mt-3" id="rates-card">
         <div class="card-header ki-card-header py-2">
           <i class="bi bi-currency-rupee me-1"></i>Current Rates
         </div>
@@ -217,6 +224,9 @@
           {% endfor %}
         </ul>
       </div>
+      </div>{# end summary-panel #}
+      <!-- Spacer so sticky save button doesn't cover last rate on mobile -->
+      <div class="d-lg-none" style="height:90px"></div>
     </div>
   </div>
 
@@ -243,8 +253,10 @@
       <div class="modal-body pb-2">
         <div class="mb-3">
           <label class="form-label fw-medium small mb-1">Item Name <span class="text-danger">*</span></label>
-          <input type="text" class="form-control" id="modal_item_name"
-                 placeholder="e.g. Wardrobe" autocomplete="off">
+          <div class="ki-ac-wrap">
+            <input type="text" class="form-control" id="modal_item_name"
+                   placeholder="e.g. Wardrobe" autocomplete="off">
+          </div>
           <div class="invalid-feedback">Item name is required.</div>
         </div>
         <div class="row g-2 mb-3">

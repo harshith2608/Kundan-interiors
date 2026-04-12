@@ -8,10 +8,10 @@
 // ─── State ────────────────────────────────────────────────────────────────────
 let woodRates = {};
 let workTypeRates = {};
-let masterRooms = [];
-let masterItems = [];
 let roomCounter = 0;
 const rooms = {};  // { roomKey: { name, items: { itemKey: { name, lengthFt, lengthIn, widthFt, widthIn, wood_type, work_type } } } }
+let masterRooms = [];
+let masterItems = [];
 
 // ─── Draft Auto-Save ──────────────────────────────────────────────────────────
 // Only active on the New Quotation form (IS_DRAFT_FORM = true, set by template).
@@ -88,89 +88,6 @@ function _showDraftIndicator() {
   el._hideTimer = setTimeout(() => { el.innerHTML = ''; }, 4000);
 }
 
-// ─── Custom Autocomplete ───────────────────────────────────────────────────────
-// Dropdown is appended to <body> so it is never clipped by table overflow or
-// any parent with overflow:hidden — works for both room-name and item-name inputs.
-function initAutocomplete(input, suggestions) {
-  const ul = document.createElement('ul');
-  ul.className = 'ki-ac-dropdown';
-  ul.setAttribute('role', 'listbox');
-  document.body.appendChild(ul);
-  input._acDropdown = ul;   // keep ref for cleanup when row/room is removed
-
-  let activeIdx = -1;
-
-  function reposition() {
-    const r = input.getBoundingClientRect();
-    ul.style.top   = r.bottom + 'px';
-    ul.style.left  = r.left + 'px';
-    ul.style.width = Math.max(r.width, 180) + 'px';
-  }
-
-  function showSuggestions(query) {
-    ul.innerHTML = '';
-    activeIdx = -1;
-    const q = (query || '').toLowerCase().trim();
-    const matches = q
-      ? suggestions.filter(s => s.toLowerCase().includes(q)).slice(0, 12)
-      : suggestions.slice(0, 12);
-
-    if (!matches.length) { ul.style.display = 'none'; return; }
-
-    matches.forEach(s => {
-      const li = document.createElement('li');
-      li.textContent = s;
-      li.setAttribute('role', 'option');
-
-      // Mouse: preventDefault stops the input losing focus before selection
-      li.addEventListener('mousedown', function (e) {
-        e.preventDefault();
-        input.value = s;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        ul.style.display = 'none';
-      });
-
-      // Touch: only select on touchend if finger didn't scroll (dy < 8px)
-      let touchStartY = 0;
-      li.addEventListener('touchstart', function (e) {
-        touchStartY = e.touches[0].clientY;
-      }, { passive: true });
-      li.addEventListener('touchend', function (e) {
-        const dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
-        if (dy < 8) {
-          e.preventDefault();
-          input.value = s;
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-          ul.style.display = 'none';
-        }
-      });
-
-      ul.appendChild(li);
-    });
-
-    reposition();
-    ul.style.display = 'block';
-  }
-
-  input.addEventListener('input',  function () { showSuggestions(this.value); });
-  input.addEventListener('focus',  function () { showSuggestions(this.value); });
-  input.addEventListener('blur',   function () { setTimeout(() => { ul.style.display = 'none'; }, 250); });
-  // Prevent scrolling inside the dropdown from closing it via blur
-  ul.addEventListener('touchstart', function (e) { e.stopPropagation(); }, { passive: true });
-  window.addEventListener('scroll', reposition, { passive: true });
-  window.addEventListener('resize', reposition, { passive: true });
-
-  input.addEventListener('keydown', function (e) {
-    const items = ul.querySelectorAll('li');
-    if (!items.length || ul.style.display === 'none') return;
-    if      (e.key === 'ArrowDown')              { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, items.length - 1); }
-    else if (e.key === 'ArrowUp')                { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); }
-    else if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); items[activeIdx].dispatchEvent(new MouseEvent('mousedown')); return; }
-    else if (e.key === 'Escape')                 { ul.style.display = 'none'; return; }
-    items.forEach((li, i) => li.classList.toggle('active', i === activeIdx));
-    if (activeIdx >= 0) items[activeIdx].scrollIntoView({ block: 'nearest' });
-  });
-}
 
 // ─── Conversion helpers ───────────────────────────────────────────────────────
 function ftInToDecimal(ft, inch) {
@@ -185,12 +102,118 @@ function decimalToFtIn(decimal) {
   return { ft, inch };
 }
 
+// ─── Custom Autocomplete ──────────────────────────────────────────────────────
+// Strategy: dropdown appended to <body> with position:absolute so no ancestor
+// overflow:hidden/auto can clip it. Positioned ONCE when opened; closed on
+// scroll/touchmove (no continuous repositioning → no jitter on mobile).
+function initAutocomplete(input, suggestions) {
+  if (!input || !suggestions || !suggestions.length) return;
+
+  const ul = document.createElement('ul');
+  ul.className = 'ki-ac-dropdown';
+  ul.style.cssText = 'position:absolute;z-index:9999;display:none;';
+  document.body.appendChild(ul);
+  input._kiAcUl = ul;
+
+  const close = () => { ul.style.display = 'none'; };
+
+  function position() {
+    const r = input.getBoundingClientRect();
+    ul.style.top   = (r.bottom + window.scrollY) + 'px';
+    ul.style.left  = (r.left   + window.scrollX) + 'px';
+    ul.style.width = r.width + 'px';
+  }
+
+  function render() {
+    const q = input.value.trim().toLowerCase();
+    const list = q ? suggestions.filter(s => s.toLowerCase().includes(q)) : suggestions;
+    if (!list.length) { close(); return; }
+    ul.innerHTML = list.map(s => `<li>${escHtml(s)}</li>`).join('');
+    position();
+    ul.style.display = 'block';
+  }
+
+  // Prevent iOS long-press context menu (Paste / Autofill / Look Up)
+  ul.addEventListener('contextmenu', e => e.preventDefault());
+
+  // Track touch movement so we can tell a tap apart from a scroll.
+  // We call preventDefault() on touchstart (non-passive) to kill the iOS
+  // long-press callout, then manually scroll the list in touchmove.
+  let _touchStartY = 0;
+  let _touchMoved  = false;
+  let _ulScrollTop = 0;
+  ul.addEventListener('touchstart', e => {
+    _touchStartY = e.touches[0].clientY;
+    _touchMoved  = false;
+    _ulScrollTop = ul.scrollTop;
+    e.preventDefault(); // blocks iOS long-press callout (Paste/Autofill)
+  }, { passive: false });
+  ul.addEventListener('touchmove', e => {
+    const dy = _touchStartY - e.touches[0].clientY;
+    if (Math.abs(dy) > 8) {
+      _touchMoved  = true;
+      ul.scrollTop = _ulScrollTop + dy; // manual scroll since native is blocked
+    }
+  }, { passive: true });
+
+  // Event delegation on the ul — works for both mouse and touch
+  ul.addEventListener('mousedown', e => {
+    const li = e.target.closest('li');
+    if (!li) return;
+    e.preventDefault();
+    input.value = li.textContent;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    close();
+  });
+  ul.addEventListener('touchend', e => {
+    if (_touchMoved) return;          // finger scrolled — don't select
+    const li = e.target.closest('li');
+    if (!li) return;
+    e.preventDefault();
+    input.value = li.textContent;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    close();
+    // Don't call input.focus() here — it would reopen the dropdown via the focus listener
+  });
+
+  input.addEventListener('focus',  render);
+  input.addEventListener('click',  render);
+  input.addEventListener('input',  render);
+  input.addEventListener('blur',   () => setTimeout(close, 200));
+
+  // Close when page scrolls, but NOT when the user is scrolling inside the dropdown
+  window.addEventListener('scroll', close, { passive: true });
+  document.addEventListener('touchmove', e => {
+    if (!ul.contains(e.target)) close();
+  }, { passive: true });
+}
+
+// Tear down autocomplete when a room/item row is removed (prevent memory leaks)
+function _destroyAc(containerEl) {
+  if (!containerEl) return;
+  containerEl.querySelectorAll('input').forEach(inp => {
+    if (inp._kiAcUl) { inp._kiAcUl.remove(); inp._kiAcUl = null; }
+  });
+}
+
+function _readDatalist(id) {
+  const dl = document.getElementById(id);
+  if (!dl) return [];
+  return Array.from(dl.options).map(o => o.value).filter(Boolean);
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   try { woodRates     = JSON.parse(document.getElementById('wood-rates-data').textContent      || '{}'); } catch (e) { woodRates = {}; }
   try { workTypeRates = JSON.parse(document.getElementById('work-type-rates-data').textContent || '{}'); } catch (e) { workTypeRates = {}; }
-  try { masterRooms   = JSON.parse(document.getElementById('master-rooms-json').textContent    || '[]'); } catch (e) { masterRooms = []; }
-  try { masterItems   = JSON.parse(document.getElementById('master-items-json').textContent    || '[]'); } catch (e) { masterItems = []; }
+
+  // Populate suggestion lists from datalist elements in HTML
+  masterRooms = _readDatalist('master-rooms-list');
+  masterItems = _readDatalist('master-items-list');
+
+  // Init autocomplete on the static modal item name input
+  const modalNameInput = document.getElementById('modal_item_name');
+  if (modalNameInput) initAutocomplete(modalNameInput, masterItems);
 
   let existingRooms = [];
   try { existingRooms = JSON.parse(document.getElementById('existing-rooms-data').textContent || '[]'); }
@@ -226,10 +249,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (dvalEl) { dvalEl.value = savedValue; dvalEl.style.display = 'block'; }
   }
 
-  // Wire up modal item name autocomplete
-  const modalNameEl = document.getElementById('modal_item_name');
-  if (modalNameEl) initAutocomplete(modalNameEl, masterItems);
-
   // Allow pressing Enter in modal fields to save
   const itemModalEl = document.getElementById('itemModal');
   if (itemModalEl) {
@@ -255,14 +274,15 @@ function addRoom(presetName) {
   div.innerHTML = `
     <div class="card-header d-flex align-items-center gap-2 py-2">
       <i class="bi bi-door-open text-primary"></i>
-      <input type="text"
-             class="form-control form-control-sm fw-semibold"
-             id="room_name_${rk}"
-             placeholder="Room name (e.g. Living Room)"
-             value="${escHtml(presetName || '')}"
-             oninput="onRoomNameChange('${rk}', this.value)"
-             autocomplete="off"
-             style="max-width:280px">
+      <div class="ki-ac-wrap" style="max-width:280px">
+        <input type="text"
+               class="form-control form-control-sm fw-semibold"
+               id="room_name_${rk}"
+               placeholder="Room name (e.g. Living Room)"
+               value="${escHtml(presetName || '')}"
+               oninput="onRoomNameChange('${rk}', this.value)"
+               autocomplete="off">
+      </div>
       <span class="badge bg-primary ms-auto me-1" id="room_total_badge_${rk}">0.00 sqft</span>
       <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRoom('${rk}')" title="Remove Room">
         <i class="bi bi-trash"></i>
@@ -291,19 +311,17 @@ function addRoom(presetName) {
     </div>
   `;
   container.appendChild(div);
-  // Init autocomplete on room name input
-  const roomNameEl = document.getElementById('room_name_' + rk);
-  if (roomNameEl) initAutocomplete(roomNameEl, masterRooms);
+  // Wire up autocomplete for room name input
+  const roomNameInput = document.getElementById('room_name_' + rk);
+  if (roomNameInput && masterRooms.length) initAutocomplete(roomNameInput, masterRooms);
   updateNoRoomsHint();
   return rk;
 }
 
 function removeRoom(rk) {
   const card = document.getElementById('room_card_' + rk);
-  if (card) {
-    card.querySelectorAll('input').forEach(inp => { if (inp._acDropdown) inp._acDropdown.remove(); });
-    card.remove();
-  }
+  _destroyAc(card);
+  if (card) card.remove();
   delete rooms[rk];
   updateNoRoomsHint();
   recalcAll();
@@ -411,12 +429,14 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
   tr.id = 'item_row_' + ik;
   tr.innerHTML = `
     <td>
-      <input type="text" class="form-control form-control-sm"
-             id="item_name_${ik}"
-             placeholder="e.g. Wardrobe"
-             value="${escHtml(name)}"
-             oninput="onItemField('${rk}','${ik}')"
-             autocomplete="off">
+      <div class="ki-ac-wrap">
+        <input type="text" class="form-control form-control-sm"
+               id="item_name_${ik}"
+               placeholder="e.g. Wardrobe"
+               value="${escHtml(name)}"
+               oninput="onItemField('${rk}','${ik}')"
+               autocomplete="off">
+      </div>
     </td>
     <td>
       <div class="input-group input-group-sm">
@@ -473,19 +493,16 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
     </td>
   `;
   tbody.appendChild(tr);
-  // Init autocomplete on item name input
-  const itemNameEl = document.getElementById('item_name_' + ik);
-  if (itemNameEl) initAutocomplete(itemNameEl, masterItems);
-
+  // Wire up autocomplete for item name input
+  const itemNameInput = document.getElementById('item_name_' + ik);
+  if (itemNameInput && masterItems.length) initAutocomplete(itemNameInput, masterItems);
   if (area > 0) recalcAll();
 }
 
 function removeItem(rk, ik) {
   const row = document.getElementById('item_row_' + ik);
-  if (row) {
-    row.querySelectorAll('input').forEach(inp => { if (inp._acDropdown) inp._acDropdown.remove(); });
-    row.remove();
-  }
+  _destroyAc(row);
+  if (row) row.remove();
   if (rooms[rk] && rooms[rk].items) delete rooms[rk].items[ik];
   recalcAll();
 }

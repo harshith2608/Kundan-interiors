@@ -36,7 +36,10 @@ def create_app(config_name='default'):
     app.register_blueprint(api_bp)
 
     # Serve static files efficiently in production (Gunicorn doesn't serve them)
-    app.wsgi_app = WhiteNoise(app.wsgi_app, root='static/', prefix='static')
+    # autorefresh=True in development so edited JS/CSS is served without restart
+    is_dev = config_name in ('development', 'default')
+    app.wsgi_app = WhiteNoise(app.wsgi_app, root='static/', prefix='static',
+                              autorefresh=is_dev)
 
     # Razorpay webhook is called by Razorpay servers — exempt from CSRF
     from .projects import razorpay_webhook
