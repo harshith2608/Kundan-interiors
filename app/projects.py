@@ -5,7 +5,7 @@ from flask import (Blueprint, render_template, redirect, url_for, flash,
                    request, abort, send_file, current_app)
 from flask_login import login_required, current_user
 from . import db
-from .models import (Project, Room, Item, MasterRoom, MasterItem, WoodRate, WorkTypeRate,
+from .models import (Project, Room, Item, MasterRoom, MasterItem, WoodRate, WorkTypeRate, ItemRate,
                      ProjectEditLog, ProjectAccess, User, AppSetting, Payment,
                      PaymentLink, Notification)
 from .decorators import admin_required
@@ -17,6 +17,10 @@ WORK_TYPES = ['Box Work', 'Frame Work']
 
 def _get_work_type_rates():
     return {r.work_type: r.rate_per_sqft for r in WorkTypeRate.query.all()}
+
+def _get_item_rates():
+    """Returns flat dict { 'wood_type|work_type': rate } for the JS form."""
+    return {f'{r.wood_type}|{r.work_type}': r.rate_per_sqft for r in ItemRate.query.all()}
 
 
 def _send_email(to_address, subject, body):
@@ -72,8 +76,7 @@ def _save_project_data(project, rooms_data):
         db.session.delete(room)
     db.session.flush()
 
-    wood_rates      = _get_wood_rates()
-    work_type_rates = _get_work_type_rates()
+    item_rates_flat = _get_item_rates()
     grand_total = 0.0
 
     for rd in rooms_data:
@@ -117,7 +120,7 @@ def _save_project_data(project, rooms_data):
                 work_type=work_type
             )
             db.session.add(item)
-            grand_total += area * wood_rates.get(wood_type, 0)
+            grand_total += area * item_rates_flat.get(f'{wood_type}|{work_type}', 0)
 
             # Auto-learn item name (case-insensitive dedup)
             if not MasterItem.query.filter(MasterItem.name.ilike(item_name)).first():
@@ -189,6 +192,7 @@ def create_project():
     master_items = [i.name for i in MasterItem.query.order_by(MasterItem.name).all()]
     rates = _get_wood_rates()
     work_type_rates = _get_work_type_rates()
+    item_rates = _get_item_rates()
 
     if request.method == 'POST':
         customer_name  = request.form.get('customer_name', '').strip()
@@ -233,6 +237,7 @@ def create_project():
                                    master_items=master_items,
                                    rates=rates,
                                    work_type_rates=work_type_rates,
+                                   item_rates=item_rates,
                                    form_data={'customer_name': customer_name,
                                               'mobile': mobile,
                                               'email': email,
@@ -284,6 +289,7 @@ def create_project():
                            master_items=master_items,
                            rates=rates,
                            work_type_rates=work_type_rates,
+                           item_rates=item_rates,
                            form_data={},
                            rooms_json='[]',
                            project=None)
@@ -300,24 +306,19 @@ def view_project(project_id):
     if project.status == 'draft':
         flash('This quotation is still in progress. Complete and save it.', 'warning')
         return redirect(url_for('projects.edit_project', project_id=project.id))
-    rates           = _get_wood_rates()
-    work_type_rates = _get_work_type_rates()
-    wood_totals     = project.get_wood_totals()
-    work_totals     = project.get_work_totals()
-    wood_summary = []
-    for wt in WOOD_TYPES:
-        area = wood_totals.get(wt, 0.0)
+    item_rates_flat = _get_item_rates()
+    item_totals = project.get_item_totals()  # { 'wood|work': area }
+    item_summary = []
+    for key in [f'{w}|{wk}' for w in WOOD_TYPES for wk in WORK_TYPES]:
+        area = item_totals.get(key, 0.0)
         if area > 0:
-            rate = rates.get(wt, 0.0)
-            wood_summary.append({
-                'wood_type': wt, 'area': area,
-                'rate': rate, 'subtotal': area * rate
+            rate = item_rates_flat.get(key, 0.0)
+            parts = key.split('|')
+            item_summary.append({
+                'label': f'{parts[0]} – {parts[1]}',
+                'wood_type': parts[0], 'work_type': parts[1],
+                'area': area, 'rate': rate, 'subtotal': round(area * rate, 2)
             })
-    work_summary = []
-    for wt in WORK_TYPES:
-        area = work_totals.get(wt, 0.0)
-        if area > 0:
-            work_summary.append({'work_type': wt, 'area': area})
     edit_logs = (ProjectEditLog.query
                  .filter_by(project_id=project.id)
                  .order_by(ProjectEditLog.edited_at.desc())
@@ -333,10 +334,8 @@ def view_project(project_id):
                              'account_number', 'ifsc_code', 'razorpay_key_id']}
     return render_template('projects/view.html',
                            project=project,
-                           wood_summary=wood_summary,
-                           work_summary=work_summary,
-                           rates=rates,
-                           work_type_rates=work_type_rates,
+                           item_summary=item_summary,
+                           item_rates=item_rates_flat,
                            edit_logs=edit_logs,
                            payments=payments,
                            total_paid=total_paid,
@@ -356,6 +355,7 @@ def edit_project(project_id):
     master_items = [i.name for i in MasterItem.query.order_by(MasterItem.name).all()]
     rates = _get_wood_rates()
     work_type_rates = _get_work_type_rates()
+    item_rates = _get_item_rates()
 
     if request.method == 'POST':
         customer_name  = request.form.get('customer_name', '').strip()
@@ -400,6 +400,7 @@ def edit_project(project_id):
                                    master_items=master_items,
                                    rates=rates,
                                    work_type_rates=work_type_rates,
+                                   item_rates=item_rates,
                                    form_data={'customer_name': customer_name,
                                               'mobile': mobile, 'email': email},
                                    rooms_json=rooms_json,
@@ -431,6 +432,7 @@ def edit_project(project_id):
                            master_items=master_items,
                            rates=rates,
                            work_type_rates=work_type_rates,
+                           item_rates=item_rates,
                            form_data={
                                'customer_name': project.customer_name,
                                'mobile': project.mobile,

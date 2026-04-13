@@ -10,110 +10,56 @@
 
 <div class="alert alert-info py-2 small">
   <i class="bi bi-info-circle me-1"></i>
+  Set the rate per sqft for each Material + Work Type combination.
   Changes apply to <strong>new</strong> quotation calculations immediately.
-  Existing quotation totals are not retroactively updated.
-  Grand Total = Σ Area × (Wood Rate + Work Type Rate) per item.
+  Grand Total = Σ (Area × Rate) per item.
 </div>
 
 <div class="row g-3">
 
-  <!-- Wood Rates -->
-  <div class="col-12 col-lg-6">
-    <div class="card shadow-sm border-0 h-100">
+  <!-- Combined Item Rates -->
+  <div class="col-12">
+    <div class="card shadow-sm border-0">
       <div class="card-header ki-card-header">
-        <i class="bi bi-layers me-2"></i>Material (Wood Type) Rates
-      </div>
-      <div class="card-body">
-        <form method="POST" action="{{ url_for('admin.rates') }}" novalidate>
-          {{ form.hidden_tag() }}
-          <div class="mb-3">
-            <label class="form-label fw-medium">
-              <span class="badge bg-primary me-2">Acrylic</span>Rate (&#8377;/sqft)
-            </label>
-            {{ form.acrylic_rate(class="form-control", placeholder="e.g. 1200") }}
-            {% for err in form.acrylic_rate.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-medium">
-              <span class="badge bg-success me-2">Laminates</span>Rate (&#8377;/sqft)
-            </label>
-            {{ form.laminates_rate(class="form-control", placeholder="e.g. 800") }}
-            {% for err in form.laminates_rate.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-medium">
-              <span class="badge bg-warning text-dark me-2">Veneer</span>Rate (&#8377;/sqft)
-            </label>
-            {{ form.veneer_rate(class="form-control", placeholder="e.g. 1500") }}
-            {% for err in form.veneer_rate.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
-          </div>
-          <button type="submit" name="wood_submit" class="btn btn-primary ki-btn-primary w-100">
-            <i class="bi bi-check-circle me-2"></i>Update Material Rates
-          </button>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <!-- Work Type Rates -->
-  <div class="col-12 col-lg-6">
-    <div class="card shadow-sm border-0 h-100">
-      <div class="card-header ki-card-header">
-        <i class="bi bi-hammer me-2"></i>Work Type Rates
+        <i class="bi bi-layers me-2"></i>Material &amp; Work Type Rates (&#8377;/sqft)
       </div>
       <div class="card-body">
         <form method="POST" action="{{ url_for('admin.rates') }}" novalidate>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <div class="mb-3">
-            <label class="form-label fw-medium">
-              <span class="badge me-2" style="background:#7c3aed;color:#fff">Box Work</span>Rate (&#8377;/sqft)
-            </label>
-            <input type="number" name="box_work_rate" class="form-control" step="0.01" min="0"
-                   placeholder="e.g. 500"
-                   value="{{ work_type_rates.get('Box Work').rate_per_sqft if work_type_rates.get('Box Work') else '' }}">
+          <div class="table-responsive">
+            <table class="table table-bordered align-middle mb-3">
+              <thead class="ki-table-head">
+                <tr>
+                  <th class="ps-3">Material</th>
+                  {% for work in work_types %}
+                  <th class="text-center">{{ work }}</th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for wood in wood_types %}
+                <tr>
+                  <td class="ps-3 fw-semibold">{{ wood }}</td>
+                  {% for work in work_types %}
+                  {% set field_key = "rate_" + wood.lower() + "_" + work.lower().replace(' ', '_') %}
+                  <td>
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text">&#8377;</span>
+                      <input type="number" name="{{ field_key }}" class="form-control text-end"
+                             step="0.01" min="0" placeholder="0"
+                             value="{{ item_rates[wood][work] | round(2) }}">
+                    </div>
+                  </td>
+                  {% endfor %}
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
           </div>
-          <div class="mb-3">
-            <label class="form-label fw-medium">
-              <span class="badge bg-warning text-dark me-2">Frame Work</span>Rate (&#8377;/sqft)
-            </label>
-            <input type="number" name="frame_work_rate" class="form-control" step="0.01" min="0"
-                   placeholder="e.g. 300"
-                   value="{{ work_type_rates.get('Frame Work').rate_per_sqft if work_type_rates.get('Frame Work') else '' }}">
-          </div>
-          <button type="submit" name="work_submit" class="btn btn-primary ki-btn-primary w-100">
-            <i class="bi bi-check-circle me-2"></i>Update Work Type Rates
+          <button type="submit" name="item_rates_submit" class="btn btn-primary ki-btn-primary">
+            <i class="bi bi-check-circle me-2"></i>Update Rates
           </button>
         </form>
-      </div>
-    </div>
-  </div>
-
-  <!-- Current Rates Summary -->
-  <div class="col-12 col-lg-6">
-    <div class="card shadow-sm border-0">
-      <div class="card-header ki-card-header"><i class="bi bi-table me-2"></i>Current Rates Summary</div>
-      <div class="card-body p-0">
-        <table class="table table-hover align-middle mb-0">
-          <thead class="ki-table-head">
-            <tr><th class="ps-3">Type</th><th>Category</th><th class="text-end pe-3">Rate (&#8377;/sqft)</th></tr>
-          </thead>
-          <tbody>
-            {% for wt, r in wood_rates.items() %}
-            <tr>
-              <td class="ps-3 fw-semibold">{{ wt }}</td>
-              <td><span class="badge bg-secondary small">Material</span></td>
-              <td class="text-end pe-3 fw-bold text-success">&#8377;{{ "{:,.0f}".format(r.rate_per_sqft) }}</td>
-            </tr>
-            {% endfor %}
-            {% for wt, r in work_type_rates.items() %}
-            <tr>
-              <td class="ps-3 fw-semibold">{{ wt }}</td>
-              <td><span class="badge small" style="background:#7c3aed;color:#fff">Work</span></td>
-              <td class="text-end pe-3 fw-bold text-primary">&#8377;{{ "{:,.0f}".format(r.rate_per_sqft) }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
       </div>
     </div>
   </div>
@@ -123,10 +69,10 @@
     <div class="card shadow-sm border-0">
       <div class="card-header ki-card-header py-2"><i class="bi bi-lightbulb me-2"></i>How Rates Work</div>
       <div class="card-body small text-muted">
-        <p class="mb-2">Each item's cost uses both rates:</p>
-        <code class="d-block bg-light p-2 rounded mb-2">Item Cost = Area × (Wood Rate + Work Rate)</code>
-        <p class="mb-2">Example — Wardrobe: 10 sqft, Laminates + Box Work:</p>
-        <code class="d-block bg-light p-2 rounded">10 × (₹800 + ₹500) = 10 × ₹1,300 = ₹13,000</code>
+        <p class="mb-2">Each item's cost = Area × Rate for that material + work combination.</p>
+        <code class="d-block bg-light p-2 rounded mb-2">Item Cost = Area × Rate(Material, Work Type)</code>
+        <p class="mb-2">Example — Wardrobe: 10 sqft, Laminates + Box Work @ ₹850:</p>
+        <code class="d-block bg-light p-2 rounded">10 × ₹850 = ₹8,500</code>
       </div>
     </div>
   </div>

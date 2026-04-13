@@ -35,10 +35,8 @@
 
 <!-- Tell JS whether auto-save should run (new form OR editing a draft) -->
 <script>const IS_DRAFT_FORM = {{ 'true' if (not project or project.status == 'draft') else 'false' }};</script>
-<!-- Wood rates for JS (hidden) -->
-<script id="wood-rates-data" type="application/json">{{ rates | tojson }}</script>
-<!-- Work type rates for JS (hidden) -->
-<script id="work-type-rates-data" type="application/json">{{ work_type_rates | tojson }}</script>
+<!-- Item rates for JS: { 'wood|work': rate } -->
+<script id="item-rates-data" type="application/json">{{ item_rates | tojson }}</script>
 <!-- Existing rooms data for edit mode -->
 <script id="existing-rooms-data" type="application/json">{{ rooms_json | safe }}</script>
 <!-- Native datalists for room/item name suggestions -->
@@ -208,10 +206,10 @@
           <i class="bi bi-currency-rupee me-1"></i>Current Rates
         </div>
         <ul class="list-group list-group-flush">
-          <li class="list-group-item py-1 small text-muted fw-semibold bg-light">Material</li>
-          {% for wt, rate in rates.items() %}
+          {% for combo, rate in item_rates.items() %}
+          {% set parts = combo.split('|') %}
           <li class="list-group-item d-flex justify-content-between py-2">
-            <span class="small fw-medium">{{ wt }}</span>
+            <span class="small fw-medium">{{ parts[0] }} – {{ parts[1] }}</span>
             <span class="small text-success fw-bold">&#8377;{{ "{:,.0f}".format(rate) }}/sqft</span>
           </li>
           {% endfor %}
@@ -276,22 +274,16 @@
             </div>
           </div>
         </div>
-        <div class="row g-2 mb-3">
-          <div class="col-6">
-            <label class="form-label fw-medium small mb-1">Wood Type</label>
-            <select class="form-select" id="modal_item_wood">
-              <option value="Acrylic">Acrylic</option>
-              <option value="Laminates" selected>Laminates</option>
-              <option value="Veneer">Veneer</option>
-            </select>
-          </div>
-          <div class="col-6">
-            <label class="form-label fw-medium small mb-1">Work Type</label>
-            <select class="form-select" id="modal_item_work">
-              <option value="Box Work" selected>Box Work</option>
-              <option value="Frame Work">Frame Work</option>
-            </select>
-          </div>
+        <div class="mb-3">
+          <label class="form-label fw-medium small mb-1">Material &amp; Work Type</label>
+          <select class="form-select" id="modal_item_combo">
+            <option value="Acrylic|Box Work">Acrylic – Box Work</option>
+            <option value="Acrylic|Frame Work">Acrylic – Frame Work</option>
+            <option value="Laminates|Box Work" selected>Laminates – Box Work</option>
+            <option value="Laminates|Frame Work">Laminates – Frame Work</option>
+            <option value="Veneer|Box Work">Veneer – Box Work</option>
+            <option value="Veneer|Frame Work">Veneer – Frame Work</option>
+          </select>
         </div>
         <div class="d-flex align-items-center justify-content-between bg-light rounded px-3 py-2">
           <span class="small text-muted fw-medium">Calculated Area</span>

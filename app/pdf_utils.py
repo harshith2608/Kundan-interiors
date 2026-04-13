@@ -149,13 +149,12 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     elements.append(Paragraph("Room-by-Room Breakdown", section_style))
     elements.append(Spacer(1, 6))
 
-    item_col_widths = ['22%', '11%', '11%', '14%', '14%', '14%', '14%']
+    item_col_widths = ['22%', '11%', '11%', '24%', '14%', '18%']
     page_width = A4[0] - 3 * cm
     col_widths = [page_width * float(p.strip('%')) / 100 for p in item_col_widths]
 
-    from .models import WoodRate as _WoodRate, WorkTypeRate as _WorkTypeRate
-    _wood_rates_map = {r.wood_type: r.rate_per_sqft for r in _WoodRate.query.all()}
-    _work_rates_map = {r.work_type: r.rate_per_sqft for r in _WorkTypeRate.query.all()}
+    from .models import ItemRate as _ItemRate
+    _item_rates_map = {f'{r.wood_type}|{r.work_type}': r.rate_per_sqft for r in _ItemRate.query.all()}
 
     for room in project.rooms.all():
         # Room header row
@@ -175,27 +174,25 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         elements.append(room_header)
 
         # Items table
-        item_rows = [['Item Name', 'Length', 'Width', 'Wood Type', 'Work Type', 'Area (sqft)', 'Subtotal (Rs.)']]
+        item_rows = [['Item Name', 'Length', 'Width', 'Material & Work', 'Area (sqft)', 'Subtotal (Rs.)']]
         room_total_area = 0.0
         room_total_cost = 0.0
         for item in room.items.all():
             work_type  = getattr(item, 'work_type', 'Box Work')
-            wood_rate  = _wood_rates_map.get(item.wood_type, 0.0)
-            work_rate  = _work_rates_map.get(work_type, 0.0)
-            subtotal   = item.area * (wood_rate + work_rate)
+            rate       = _item_rates_map.get(f'{item.wood_type}|{work_type}', 0.0)
+            subtotal   = item.area * rate
             room_total_area += item.area
             room_total_cost += subtotal
             item_rows.append([
                 item.name,
                 ft_in(item.length),
                 ft_in(item.width),
-                item.wood_type,
-                work_type,
+                f'{item.wood_type} – {work_type}',
                 f'{item.area:.2f}',
                 f'{subtotal:,.2f}'
             ])
         # Room total row
-        item_rows.append(['', '', '', '', 'Room Total:', f'{room_total_area:.2f} sqft', f'Rs. {room_total_cost:,.2f}'])
+        item_rows.append(['', '', '', 'Room Total:', f'{room_total_area:.2f} sqft', f'Rs. {room_total_cost:,.2f}'])
 
         item_table = Table(item_rows, colWidths=col_widths)
         item_table.setStyle(TableStyle([
@@ -210,15 +207,15 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
             ('FONTSIZE', (0, 1), (-1, -1), 8),
             ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
             ('ALIGN', (0, 1), (0, -1), 'LEFT'),
-            ('ALIGN', (6, 1), (6, -1), 'RIGHT'),
+            ('ALIGN', (5, 1), (5, -1), 'RIGHT'),
             # Alternating row colors
             ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#fafafa')]),
             # Total row
             ('BACKGROUND', (0, -1), (-1, -1), BRAND_LIGHT),
-            ('FONTNAME', (4, -1), (-1, -1), 'Helvetica-Bold'),
-            ('TEXTCOLOR', (4, -1), (-1, -1), BRAND_DARK),
-            ('ALIGN', (4, -1), (5, -1), 'CENTER'),
-            ('ALIGN', (6, -1), (6, -1), 'RIGHT'),
+            ('FONTNAME', (3, -1), (-1, -1), 'Helvetica-Bold'),
+            ('TEXTCOLOR', (3, -1), (-1, -1), BRAND_DARK),
+            ('ALIGN', (3, -1), (4, -1), 'CENTER'),
+            ('ALIGN', (5, -1), (5, -1), 'RIGHT'),
             # Grid
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
             ('LINEBELOW', (0, 0), (-1, 0), 1, BRAND_DARK),
@@ -235,32 +232,26 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     elements.append(Paragraph("Cost Summary", section_style))
     elements.append(Spacer(1, 6))
 
-    wood_rates = _wood_rates_map
-    work_rates = _work_rates_map
-    wood_totals = project.get_wood_totals()
-    work_totals = project.get_work_totals()
+    item_totals = project.get_item_totals()  # { 'wood|work': area }
+    summary_cw = [page_width * p for p in [0.35, 0.22, 0.22, 0.21]]
 
-    summary_cw = [page_width * p for p in [0.30, 0.25, 0.25, 0.20]]
-
-    # Material cost sub-table
-    elements.append(Paragraph("Material (Wood Type)", ParagraphStyle(
-        'SubSection', parent=styles['Normal'], fontSize=9,
-        fontName='Helvetica-Bold', textColor=colors.HexColor('#283593')
-    )))
+    # Combined material + work cost table
     elements.append(Spacer(1, 3))
-    mat_data = [['Material', 'Total Area (sqft)', 'Rate (Rs./sqft)', 'Amount (Rs.)']]
-    mat_total = 0.0
-    for wt in WOOD_TYPES:
-        area = wood_totals.get(wt, 0.0)
-        if area > 0:
-            rate = wood_rates.get(wt, 0.0)
-            subtotal = area * rate
-            mat_total += subtotal
-            mat_data.append([wt, f'{area:,.2f}', f'{rate:,.0f}', f'{subtotal:,.2f}'])
-    mat_data.append(['', '', 'Material Subtotal', f'Rs. {mat_total:,.2f}'])
+    combo_data = [['Material & Work Type', 'Total Area (sqft)', 'Rate (Rs./sqft)', 'Amount (Rs.)']]
+    combo_total = 0.0
+    for wood in WOOD_TYPES:
+        for work in WORK_TYPES:
+            key = f'{wood}|{work}'
+            area = item_totals.get(key, 0.0)
+            if area > 0:
+                rate = _item_rates_map.get(key, 0.0)
+                subtotal = area * rate
+                combo_total += subtotal
+                combo_data.append([f'{wood} – {work}', f'{area:,.2f}', f'{rate:,.0f}', f'{subtotal:,.2f}'])
+    combo_data.append(['', '', 'Subtotal', f'Rs. {combo_total:,.2f}'])
 
-    mat_table = Table(mat_data, colWidths=summary_cw)
-    mat_table.setStyle(TableStyle([
+    combo_table = Table(combo_data, colWidths=summary_cw)
+    combo_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -278,47 +269,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         ('TOPPADDING', (0, 0), (-1, -1), 6),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
     ]))
-    elements.append(mat_table)
-    elements.append(Spacer(1, 8))
-
-    # Work type cost sub-table
-    elements.append(Paragraph("Work Type", ParagraphStyle(
-        'SubSection2', parent=styles['Normal'], fontSize=9,
-        fontName='Helvetica-Bold', textColor=colors.HexColor('#7c3aed')
-    )))
-    elements.append(Spacer(1, 3))
-    work_data = [['Work Type', 'Total Area (sqft)', 'Rate (Rs./sqft)', 'Amount (Rs.)']]
-    work_total = 0.0
-    for wt in WORK_TYPES:
-        area = work_totals.get(wt, 0.0)
-        if area > 0:
-            rate = work_rates.get(wt, 0.0)
-            subtotal = area * rate
-            work_total += subtotal
-            work_data.append([wt, f'{area:,.2f}', f'{rate:,.0f}', f'{subtotal:,.2f}'])
-    work_data.append(['', '', 'Work Subtotal', f'Rs. {work_total:,.2f}'])
-
-    work_table = Table(work_data, colWidths=summary_cw)
-    WORK_HEADER_BG = colors.HexColor('#5b21b6')
-    work_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), WORK_HEADER_BG),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 9),
-        ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#ede9fe')]),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#ede9fe')),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('TEXTCOLOR', (2, -1), (-1, -1), colors.HexColor('#5b21b6')),
-        ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
-        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
-        ('PADDING', (0, 0), (-1, -1), 7),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-    ]))
-    elements.append(work_table)
+    elements.append(combo_table)
     elements.append(Spacer(1, 8))
 
     # Discount + Final total rows
@@ -563,21 +514,23 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     elements.append(Paragraph("Cost Summary", section_style))
     elements.append(Spacer(1, 8))
 
-    from .models import WoodRate as _WoodRate
-    _wood_rates_map = {r.wood_type: r.rate_per_sqft for r in _WoodRate.query.all()}
+    from .models import ItemRate as _ItemRate2
+    _item_rates_map2 = {f'{r.wood_type}|{r.work_type}': r.rate_per_sqft for r in _ItemRate2.query.all()}
 
-    wood_totals = project.get_wood_totals()
+    item_totals2 = project.get_item_totals()  # { 'wood|work': area }
 
-    # Material cost — show material type and amount only (no area, no rate)
+    # Cost summary — show material+work combo and amount only (no area, no rate)
     cost_cw   = [page_width * p for p in [0.60, 0.40]]
-    cost_data = [['Material', 'Amount (Rs.)']]
+    cost_data = [['Material & Work Type', 'Amount (Rs.)']]
     mat_total = 0.0
-    for wt in WOOD_TYPES:
-        area = wood_totals.get(wt, 0.0)
-        if area > 0:
-            subtotal   = area * _wood_rates_map.get(wt, 0.0)
-            mat_total += subtotal
-            cost_data.append([wt, f'{subtotal:,.2f}'])
+    for wood in WOOD_TYPES:
+        for work in WORK_TYPES:
+            key = f'{wood}|{work}'
+            area = item_totals2.get(key, 0.0)
+            if area > 0:
+                subtotal   = area * _item_rates_map2.get(key, 0.0)
+                mat_total += subtotal
+                cost_data.append([f'{wood} – {work}', f'{subtotal:,.2f}'])
     cost_data.append(['Total', f'Rs. {mat_total:,.2f}'])
 
     cost_table = Table(cost_data, colWidths=cost_cw)

@@ -6,8 +6,7 @@
 'use strict';
 
 // ─── State ────────────────────────────────────────────────────────────────────
-let woodRates = {};
-let workTypeRates = {};
+let itemRates = {};  // { 'wood|work': rate }
 let roomCounter = 0;
 const rooms = {};  // { roomKey: { name, items: { itemKey: { name, lengthFt, lengthIn, widthFt, widthIn, wood_type, work_type } } } }
 let masterRooms = [];
@@ -204,8 +203,7 @@ function _readDatalist(id) {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  try { woodRates     = JSON.parse(document.getElementById('wood-rates-data').textContent      || '{}'); } catch (e) { woodRates = {}; }
-  try { workTypeRates = JSON.parse(document.getElementById('work-type-rates-data').textContent || '{}'); } catch (e) { workTypeRates = {}; }
+  try { itemRates = JSON.parse(document.getElementById('item-rates-data').textContent || '{}'); } catch (e) { itemRates = {}; }
 
   // Populate suggestion lists from datalist elements in HTML
   masterRooms = _readDatalist('master-rooms-list');
@@ -296,8 +294,7 @@ function addRoom(presetName) {
               <th style="min-width:150px">Item Name</th>
               <th style="min-width:155px">Length</th>
               <th style="min-width:155px">Width</th>
-              <th style="min-width:120px">Wood Type</th>
-              <th style="min-width:120px">Work Type</th>
+              <th style="min-width:180px">Material &amp; Work</th>
               <th style="min-width:80px">Area (sqft)</th>
               <th style="width:36px"></th>
             </tr>
@@ -353,10 +350,8 @@ function openItemModal(rk) {
   ['modal_item_lft','modal_item_lin','modal_item_wft','modal_item_win'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
-  const woodEl = document.getElementById('modal_item_wood');
-  const workEl = document.getElementById('modal_item_work');
-  if (woodEl) woodEl.value = 'Laminates';
-  if (workEl) workEl.value = 'Box Work';
+  const comboEl = document.getElementById('modal_item_combo');
+  if (comboEl) comboEl.value = 'Laminates|Box Work';
   const areaEl = document.getElementById('modal_item_area');
   if (areaEl) areaEl.textContent = '0.00';
   const modal = new bootstrap.Modal(document.getElementById('itemModal'));
@@ -387,8 +382,9 @@ function saveItemFromModal() {
   const lIn  = parseFloat(document.getElementById('modal_item_lin')?.value) || 0;
   const wFt  = parseFloat(document.getElementById('modal_item_wft')?.value) || 0;
   const wIn  = parseFloat(document.getElementById('modal_item_win')?.value) || 0;
-  const wood = document.getElementById('modal_item_wood')?.value || 'Laminates';
-  const work = document.getElementById('modal_item_work')?.value || 'Box Work';
+  const combo = (document.getElementById('modal_item_combo')?.value || 'Laminates|Box Work').split('|');
+  const wood = combo[0] || 'Laminates';
+  const work = combo[1] || 'Box Work';
 
   _insertItemRow(_modalRoomKey, name, lFt, lIn, wFt, wIn, wood, work);
 
@@ -468,16 +464,9 @@ function _insertItemRow(rk, presetName, presetLFt, presetLIn, presetWFt, presetW
     </td>
     <td>
       <select class="form-select form-select-sm"
-              id="item_wood_${ik}"
+              id="item_combo_${ik}"
               onchange="onItemField('${rk}','${ik}')">
-        ${buildWoodOptions(wood)}
-      </select>
-    </td>
-    <td>
-      <select class="form-select form-select-sm"
-              id="item_work_${ik}"
-              onchange="onItemField('${rk}','${ik}')">
-        ${buildWorkTypeOptions(work)}
+        ${buildComboOptions(wood, work)}
       </select>
     </td>
     <td class="text-center">
@@ -510,14 +499,13 @@ function removeItem(rk, ik) {
 function onItemField(rk, ik) {
   if (!rooms[rk] || !rooms[rk].items[ik]) return;
 
-  const nameEl = document.getElementById('item_name_' + ik);
-  const lFtEl  = document.getElementById('item_lft_'  + ik);
-  const lInEl  = document.getElementById('item_lin_'  + ik);
-  const wFtEl  = document.getElementById('item_wft_'  + ik);
-  const wInEl  = document.getElementById('item_win_'  + ik);
-  const woodEl = document.getElementById('item_wood_' + ik);
-  const workEl = document.getElementById('item_work_' + ik);
-  const areaEl = document.getElementById('item_area_' + ik);
+  const nameEl  = document.getElementById('item_name_'  + ik);
+  const lFtEl   = document.getElementById('item_lft_'   + ik);
+  const lInEl   = document.getElementById('item_lin_'   + ik);
+  const wFtEl   = document.getElementById('item_wft_'   + ik);
+  const wInEl   = document.getElementById('item_win_'   + ik);
+  const comboEl = document.getElementById('item_combo_' + ik);
+  const areaEl  = document.getElementById('item_area_'  + ik);
 
   // Clamp inches 0–11
   if (lInEl && parseInt(lInEl.value) > 11) lInEl.value = 11;
@@ -532,12 +520,13 @@ function onItemField(rk, ik) {
   const wDec = ftInToDecimal(wFt, wIn);
   const area  = parseFloat((lDec * wDec).toFixed(4));
 
+  const comboParts = (comboEl?.value || 'Laminates|Box Work').split('|');
   rooms[rk].items[ik] = {
     name:      nameEl?.value.trim() || '',
     lengthFt:  lFt, lengthIn: lIn,
     widthFt:   wFt, widthIn:  wIn,
-    wood_type: woodEl?.value || 'Laminates',
-    work_type: workEl?.value || 'Box Work',
+    wood_type: comboParts[0] || 'Laminates',
+    work_type: comboParts[1] || 'Box Work',
     area
   };
 
@@ -547,25 +536,24 @@ function onItemField(rk, ik) {
 
 // ─── Calculations ─────────────────────────────────────────────────────────────
 function recalcAll() {
-  const woodAreas = {};
-  const workAreas = {};
+  const comboAreas = {};  // { 'wood|work': area }
 
   Object.entries(rooms).forEach(([rk, room]) => {
     let roomArea = 0;
     Object.values(room.items).forEach(item => {
       const a = item.area || 0;
       roomArea += a;
-      woodAreas[item.wood_type] = (woodAreas[item.wood_type] || 0) + a;
-      workAreas[item.work_type] = (workAreas[item.work_type] || 0) + a;
+      const key = `${item.wood_type}|${item.work_type}`;
+      comboAreas[key] = (comboAreas[key] || 0) + a;
     });
     const badge = document.getElementById('room_total_badge_' + rk);
     if (badge) badge.textContent = roomArea.toFixed(2) + ' sqft';
   });
 
   let grandTotal = 0;
-  Object.entries(woodAreas).forEach(([wt, area]) => { grandTotal += area * (woodRates[wt] || 0); });
+  Object.entries(comboAreas).forEach(([key, area]) => { grandTotal += area * (itemRates[key] || 0); });
 
-  renderSummary(woodAreas, workAreas, grandTotal);
+  renderSummary(comboAreas, grandTotal);
 
   const fmt = '₹' + grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gtEl = document.getElementById('grand-total-display');
@@ -629,48 +617,37 @@ function onDiscountChange() {
   _updateFinalTotal(grandTotal);
 }
 
-function renderSummary(woodAreas, workAreas, grandTotal) {
+const COMBO_COLORS = {
+  'Acrylic|Box Work':    { bg:'#dbeafe', color:'#1e40af' },
+  'Acrylic|Frame Work':  { bg:'#bfdbfe', color:'#1e3a8a' },
+  'Laminates|Box Work':  { bg:'#dcfce7', color:'#166534' },
+  'Laminates|Frame Work':{ bg:'#bbf7d0', color:'#14532d' },
+  'Veneer|Box Work':     { bg:'#ffedd5', color:'#9a3412' },
+  'Veneer|Frame Work':   { bg:'#fed7aa', color:'#7c2d12' },
+};
+
+function renderSummary(comboAreas, grandTotal) {
   const panel = document.getElementById('summary-content');
   if (!panel) return;
-  const hasData = Object.values(woodAreas).some(a => a > 0);
+  const hasData = Object.values(comboAreas).some(a => a > 0);
   if (!hasData) {
     panel.innerHTML = '<p class="text-muted text-center small py-2">Add rooms and items to see cost breakdown.</p>';
     return;
   }
-  const woodColors = {
-    'Acrylic':   { bg:'#dbeafe', color:'#1e40af' },
-    'Laminates': { bg:'#dcfce7', color:'#166534' },
-    'Veneer':    { bg:'#ffedd5', color:'#9a3412' },
-  };
-  const workColors = {
-    'Box Work':   { bg:'#ede9fe', color:'#5b21b6' },
-    'Frame Work': { bg:'#fef3c7', color:'#92400e' },
-  };
-  let html = '<div class="small fw-semibold text-muted mb-1">Material Cost</div>';
-  Object.entries(woodAreas).forEach(([wt, area]) => {
+  let html = '<div class="small fw-semibold text-muted mb-1">Cost Breakdown</div>';
+  Object.entries(comboAreas).forEach(([key, area]) => {
     if (area <= 0) return;
-    const rate = woodRates[wt] || 0;
-    const c    = woodColors[wt] || { bg:'#f3f4f6', color:'#374151' };
+    const rate = itemRates[key] || 0;
+    const parts = key.split('|');
+    const label = parts[0] + ' – ' + (parts[1] || '');
+    const c = COMBO_COLORS[key] || { bg:'#f3f4f6', color:'#374151' };
     html += `
       <div class="summary-wood-row">
         <span class="summary-wood-label">
-          <span class="badge me-1" style="background:${c.bg};color:${c.color}">${wt}</span>
+          <span class="badge me-1" style="background:${c.bg};color:${c.color}">${escHtml(label)}</span>
         </span>
         <span class="text-muted small">${area.toFixed(2)} sqft</span>
         <span class="summary-wood-value">₹${(area*rate).toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
-      </div>`;
-  });
-  html += '<div class="small fw-semibold text-muted mb-1 mt-2">Work Type</div>';
-  Object.entries(workAreas).forEach(([wt, area]) => {
-    if (area <= 0) return;
-    const c = workColors[wt] || { bg:'#f3f4f6', color:'#374151' };
-    html += `
-      <div class="summary-wood-row">
-        <span class="summary-wood-label">
-          <span class="badge me-1" style="background:${c.bg};color:${c.color}">${wt}</span>
-        </span>
-        <span class="text-muted small">${area.toFixed(2)} sqft</span>
-        <span class="summary-wood-value text-muted small">display only</span>
       </div>`;
   });
   panel.innerHTML = html;
@@ -731,16 +708,20 @@ function validateAndSubmit() {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function buildWoodOptions(selected) {
-  return ['Acrylic','Laminates','Veneer']
-    .map(t => `<option value="${t}" ${t === selected ? 'selected' : ''}>${t}</option>`)
-    .join('');
-}
-
-function buildWorkTypeOptions(selected) {
-  return ['Box Work','Frame Work']
-    .map(t => `<option value="${t}" ${t === selected ? 'selected' : ''}>${t}</option>`)
-    .join('');
+function buildComboOptions(wood, work) {
+  const combos = [
+    ['Acrylic',   'Box Work'],
+    ['Acrylic',   'Frame Work'],
+    ['Laminates', 'Box Work'],
+    ['Laminates', 'Frame Work'],
+    ['Veneer',    'Box Work'],
+    ['Veneer',    'Frame Work'],
+  ];
+  return combos.map(([w, wk]) => {
+    const val = `${w}|${wk}`;
+    const sel = (w === wood && wk === work) ? 'selected' : '';
+    return `<option value="${val}" ${sel}>${w} – ${wk}</option>`;
+  }).join('');
 }
 
 function escHtml(str) {

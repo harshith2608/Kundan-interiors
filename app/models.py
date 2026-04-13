@@ -51,6 +51,15 @@ class Project(db.Model):
                 totals[item.wood_type] = totals.get(item.wood_type, 0.0) + item.area
         return totals
 
+    def get_item_totals(self):
+        """Returns dict of {'wood_type|work_type': total_area}"""
+        totals = {}
+        for room in self.rooms:
+            for item in room.items:
+                key = f'{item.wood_type}|{item.work_type}'
+                totals[key] = totals.get(key, 0.0) + item.area
+        return totals
+
     def get_work_totals(self):
         """Returns dict of {work_type: total_area}"""
         totals = {}
@@ -142,6 +151,17 @@ class WorkTypeRate(db.Model):
 
     def __repr__(self):
         return f'<WorkTypeRate {self.work_type}: {self.rate_per_sqft}>'
+
+
+class ItemRate(db.Model):
+    __tablename__ = 'item_rates'
+    id            = db.Column(db.Integer, primary_key=True)
+    wood_type     = db.Column(db.String(50), nullable=False)
+    work_type     = db.Column(db.String(50), nullable=False)
+    rate_per_sqft = db.Column(db.Float, nullable=False, default=0.0)
+    __table_args__ = (db.UniqueConstraint('wood_type', 'work_type', name='uq_item_rate'),)
+    def __repr__(self):
+        return f'<ItemRate {self.wood_type}|{self.work_type}: {self.rate_per_sqft}>'
 
 
 class ProjectAccess(db.Model):

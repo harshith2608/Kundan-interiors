@@ -120,28 +120,25 @@
         <i class="bi bi-calculator me-2"></i>Cost Summary
       </div>
       <div class="card-body">
-        {% if wood_summary or work_summary %}
+        {% if item_summary %}
         <table class="table table-sm align-middle mb-3">
           <thead class="table-light">
             <tr>
-              <th>Type</th>
+              <th>Material &amp; Work</th>
               <th class="text-end">Area (sqft)</th>
               <th class="text-end">Rate (&#8377;/sqft)</th>
               <th class="text-end">Amount (&#8377;)</th>
             </tr>
           </thead>
           <tbody>
-            {% if wood_summary %}
-            <tr><td colspan="4" class="fw-semibold text-muted small py-1 ps-1">Material Cost</td></tr>
-            {% for row in wood_summary %}
+            {% for row in item_summary %}
             <tr>
-              <td><span class="badge ki-badge-{{ row.wood_type|lower }}">{{ row.wood_type }}</span></td>
+              <td><span class="badge ki-badge-{{ row.wood_type|lower }}">{{ row.label }}</span></td>
               <td class="text-end">{{ "%.2f"|format(row.area) }}</td>
               <td class="text-end">{{ "{:,.0f}".format(row.rate) }}</td>
               <td class="text-end fw-semibold">{{ "{:,.2f}".format(row.subtotal) }}</td>
             </tr>
             {% endfor %}
-            {% endif %}
           </tbody>
           <tfoot>
             <tr>
@@ -213,7 +210,7 @@
             </thead>
             <tbody>
               {% for item in room.items.all() %}
-              {% set item_subtotal = item.area * rates.get(item.wood_type, 0) %}
+              {% set item_subtotal = item.area * item_rates.get(item.wood_type ~ '|' ~ item.work_type, 0) %}
               <tr>
                 <td class="fw-medium">{{ item.name }}</td>
                 <td class="text-center text-nowrap">{{ item.length | ft_in }}</td>
@@ -239,7 +236,7 @@
                 <td colspan="2"></td>
                 {% set room_cost = namespace(val=0) %}
                 {% for item in room.items.all() %}
-                  {% set room_cost.val = room_cost.val + item.area * rates.get(item.wood_type, 0) %}
+                  {% set room_cost.val = room_cost.val + item.area * item_rates.get(item.wood_type ~ '|' ~ item.work_type, 0) %}
                 {% endfor %}
                 <td class="text-end fw-bold text-primary">&#8377;{{ "{:,.2f}".format(room_cost.val) }}</td>
               </tr>
