@@ -463,8 +463,8 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
 
 def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     """
-    Generate a customer-facing PDF with cost summary only — no item measurements.
-    Shows wood type cost breakdown and work type area breakdown (display only).
+    Generate a customer-facing PDF: total costs only, no measurements.
+    Shows material type → amount, final total, material specs, and T&C.
     """
     buffer = BytesIO()
     doc = SimpleDocTemplate(
@@ -567,76 +567,38 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     _wood_rates_map = {r.wood_type: r.rate_per_sqft for r in _WoodRate.query.all()}
 
     wood_totals = project.get_wood_totals()
-    work_totals = project.get_work_totals()
-    summary_cw  = [page_width * p for p in [0.35, 0.25, 0.20, 0.20]]
 
-    # Material cost table
-    elements.append(Paragraph("Material Cost", ParagraphStyle(
-        'SubSec', parent=styles['Normal'], fontSize=9,
-        fontName='Helvetica-Bold', textColor=colors.HexColor('#283593')
-    )))
-    elements.append(Spacer(1, 3))
-    mat_data  = [['Material', 'Total Area (sqft)', 'Rate (Rs./sqft)', 'Amount (Rs.)']]
+    # Material cost — show material type and amount only (no area, no rate)
+    cost_cw   = [page_width * p for p in [0.60, 0.40]]
+    cost_data = [['Material', 'Amount (Rs.)']]
     mat_total = 0.0
     for wt in WOOD_TYPES:
         area = wood_totals.get(wt, 0.0)
         if area > 0:
-            rate     = _wood_rates_map.get(wt, 0.0)
-            subtotal = area * rate
+            subtotal   = area * _wood_rates_map.get(wt, 0.0)
             mat_total += subtotal
-            mat_data.append([wt, f'{area:,.2f}', f'{rate:,.0f}', f'{subtotal:,.2f}'])
-    mat_data.append(['', '', 'Material Subtotal', f'Rs. {mat_total:,.2f}'])
+            cost_data.append([wt, f'{subtotal:,.2f}'])
+    cost_data.append(['Total', f'Rs. {mat_total:,.2f}'])
 
-    mat_table = Table(mat_data, colWidths=summary_cw)
-    mat_table.setStyle(TableStyle([
+    cost_table = Table(cost_data, colWidths=cost_cw)
+    cost_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
         ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
         ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, BRAND_LIGHT]),
         ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e8eaf6')),
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('TEXTCOLOR', (2, -1), (-1, -1), BRAND_DARK),
+        ('TEXTCOLOR', (0, -1), (-1, -1), BRAND_DARK),
         ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
         ('ALIGN', (0, 0), (0, -1), 'LEFT'),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
-        ('PADDING', (0, 0), (-1, -1), 7),
+        ('PADDING', (0, 0), (-1, -1), 8),
     ]))
-    elements.append(mat_table)
+    elements.append(cost_table)
     elements.append(Spacer(1, 10))
-
-    # Work type breakdown (area only — no rates)
-    if any(work_totals.get(wt, 0.0) > 0 for wt in WORK_TYPES):
-        elements.append(Paragraph("Work Type Breakdown", ParagraphStyle(
-            'SubSec2', parent=styles['Normal'], fontSize=9,
-            fontName='Helvetica-Bold', textColor=colors.HexColor('#7c3aed')
-        )))
-        elements.append(Spacer(1, 3))
-        work_cw = [page_width * p for p in [0.50, 0.50]]
-        work_data = [['Work Type', 'Total Area (sqft)']]
-        for wt in WORK_TYPES:
-            area = work_totals.get(wt, 0.0)
-            if area > 0:
-                work_data.append([wt, f'{area:,.2f}'])
-        WORK_HEADER_BG = colors.HexColor('#5b21b6')
-        work_table = Table(work_data, colWidths=work_cw)
-        work_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), WORK_HEADER_BG),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#ede9fe')]),
-            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
-            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
-            ('PADDING', (0, 0), (-1, -1), 7),
-        ]))
-        elements.append(work_table)
-        elements.append(Spacer(1, 10))
 
     # Discount + Final total
     discount_amount = getattr(project, 'discount_amount', 0.0)
@@ -648,19 +610,19 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
         dtype = getattr(project, 'discount_type', 'none')
         dval  = getattr(project, 'discount_value', 0) or 0
         disc_label = f'Discount ({dval:.0f}%)' if dtype == 'percentage' else 'Discount (Fixed)'
-        total_rows.append(['', disc_label, f'- Rs. {discount_amount:,.2f}'])
+        total_rows.append([disc_label, f'- Rs. {discount_amount:,.2f}'])
         total_style_cmds += [
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#fef2f2')),
-            ('TEXTCOLOR', (1, 0), (-1, 0), colors.HexColor('#b91c1c')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#b91c1c')),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
             ('ALIGN', (1, 0), (-1, 0), 'RIGHT'),
-            ('PADDING', (0, 0), (-1, 0), 7),
+            ('PADDING', (0, 0), (-1, 0), 8),
         ]
 
     fi = len(total_rows)
-    total_rows.append(['', 'FINAL TOTAL', f'Rs. {final_total:,.2f}'])
-    ft_cw = [page_width * p for p in [0.40, 0.35, 0.25]]
+    total_rows.append(['FINAL TOTAL', f'Rs. {final_total:,.2f}'])
+    ft_cw = cost_cw
     total_style_cmds += [
         ('BACKGROUND', (0, fi), (-1, fi), BRAND_DARK),
         ('TEXTCOLOR', (0, fi), (-1, fi), colors.white),
