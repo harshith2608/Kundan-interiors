@@ -121,6 +121,33 @@
       </div>
       <div class="card-body">
         {% if item_summary %}
+        <!-- Mobile: stacked list -->
+        <div class="d-md-none">
+          {% for row in item_summary %}
+          <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+            <div>
+              <span class="badge ki-badge-{{ row.wood_type|lower }} d-block mb-1">{{ row.label }}</span>
+              <span class="text-muted small">{{ "%.2f"|format(row.area) }} sqft &times; &#8377;{{ "{:,.0f}".format(row.rate) }}/sqft</span>
+            </div>
+            <span class="fw-semibold ms-3 text-nowrap">&#8377;{{ "{:,.2f}".format(row.subtotal) }}</span>
+          </div>
+          {% endfor %}
+          <div class="d-flex justify-content-between py-2 text-muted small">
+            <span>Subtotal</span><span>&#8377;{{ "{:,.2f}".format(project.grand_total) }}</span>
+          </div>
+          {% if project.discount_type != 'none' and project.discount_value %}
+          <div class="d-flex justify-content-between py-2 text-danger small fw-semibold">
+            <span>Discount{% if project.discount_type == 'percentage' %} ({{ project.discount_value | int }}%){% endif %}</span>
+            <span>- &#8377;{{ "{:,.2f}".format(project.discount_amount) }}</span>
+          </div>
+          {% endif %}
+          <div class="d-flex justify-content-between align-items-center py-2 ki-grand-total-row mt-1 px-2 rounded">
+            <span class="fw-bold fs-6">FINAL TOTAL</span>
+            <span class="fw-bold fs-5 text-success">&#8377;{{ "{:,.2f}".format(project.final_total) }}</span>
+          </div>
+        </div>
+        <!-- Desktop: table -->
+        <div class="d-none d-md-block">
         <table class="table table-sm align-middle mb-3">
           <thead class="table-light">
             <tr>
@@ -166,6 +193,7 @@
             </tr>
           </tfoot>
         </table>
+        </div>
         {% else %}
         <div class="text-center text-muted py-3">
           <i class="bi bi-calculator display-4"></i>
@@ -200,11 +228,10 @@
             <thead class="table-light">
               <tr>
                 <th>Item</th>
-                <th class="text-center">Length</th>
-                <th class="text-center">Width</th>
+                <th class="text-center d-none d-md-table-cell">Length</th>
+                <th class="text-center d-none d-md-table-cell">Width</th>
                 <th class="text-center">Area (sqft)</th>
-                <th class="text-center">Wood Type</th>
-                <th class="text-center">Work Type</th>
+                <th class="text-center">Material &amp; Work</th>
                 <th class="text-end">Subtotal (&#8377;)</th>
               </tr>
             </thead>
@@ -213,17 +240,15 @@
               {% set item_subtotal = item.area * item_rates.get(item.wood_type ~ '|' ~ item.work_type, 0) %}
               <tr>
                 <td class="fw-medium">{{ item.name }}</td>
-                <td class="text-center text-nowrap">{{ item.length | ft_in }}</td>
-                <td class="text-center text-nowrap">{{ item.width | ft_in }}</td>
+                <td class="text-center text-nowrap d-none d-md-table-cell">{{ item.length | ft_in }}</td>
+                <td class="text-center text-nowrap d-none d-md-table-cell">{{ item.width | ft_in }}</td>
                 <td class="text-center fw-semibold">{{ "%.2f"|format(item.area) }}</td>
                 <td class="text-center">
                   <span class="badge ki-badge-{{ item.wood_type|lower }}">{{ item.wood_type }}</span>
-                </td>
-                <td class="text-center">
-                  <span class="badge {% if item.work_type == 'Box Work' %}bg-purple text-white{% else %}bg-warning text-dark{% endif %}"
-                        style="{% if item.work_type == 'Box Work' %}background:#7c3aed!important{% endif %}">
-                    {{ item.work_type }}
-                  </span>
+                  <span class="badge d-md-none ms-1 {% if item.work_type == 'Box Work' %}text-white{% else %}bg-warning text-dark{% endif %}"
+                        style="{% if item.work_type == 'Box Work' %}background:#7c3aed{% endif %}">{{ item.work_type }}</span>
+                  <span class="d-none d-md-inline ms-1 badge {% if item.work_type == 'Box Work' %}text-white{% else %}bg-warning text-dark{% endif %}"
+                        style="{% if item.work_type == 'Box Work' %}background:#7c3aed{% endif %}">{{ item.work_type }}</span>
                 </td>
                 <td class="text-end fw-semibold text-success">&#8377;{{ "{:,.2f}".format(item_subtotal) }}</td>
               </tr>
@@ -231,9 +256,10 @@
             </tbody>
             <tfoot>
               <tr class="table-light">
-                <td colspan="3" class="fw-semibold text-muted text-end small">Room Total</td>
+                <td colspan="2" class="fw-semibold text-muted text-end small d-none d-md-table-cell">Room Total</td>
+                <td class="fw-semibold text-muted text-end small d-md-none">Room Total</td>
                 <td class="text-center fw-semibold">{{ "%.2f"|format(room.total_area) }} sqft</td>
-                <td colspan="2"></td>
+                <td></td>
                 {% set room_cost = namespace(val=0) %}
                 {% for item in room.items.all() %}
                   {% set room_cost.val = room_cost.val + item.area * item_rates.get(item.wood_type ~ '|' ~ item.work_type, 0) %}
