@@ -678,59 +678,6 @@ function renderSummary(woodAreas, workAreas, grandTotal) {
   panel.innerHTML = html;
 }
 
-// ─── Material Specs Modal ─────────────────────────────────────────────────────
-const DEFAULT_SPECS = `MATERIAL SPECIFICATIONS:
-● Plywood: Gurjan 18mm BWP, termite proof, ISI marked 25yrs warranty
-● Inside finishing 0.8 mm White laminate.
-● Outer finish, laminate of 1.2mm
-● Sliding channels made of Ebco or Similar
-● Hinges: Heavy gauge of L-type hinges with SS finish make of Ebco soft closing
-● Handles: Profile handles made of ESS ESS or Ebco Regular handles made of SS
-● Drawers, channels and all other fittings made of Ebco
-● Baskets: SS Baskets made of Ebco or Similar`;
-
-function showSpecsModal() {
-  // Run form validation first — don't open modal if form is invalid
-  if (!_validateForm()) return;
-
-  const textarea = document.getElementById('material_specs_textarea');
-  const existingSpecs = (document.getElementById('material_specs_field') || {}).value || '';
-  // Pre-fill with saved specs (edit mode) or default text (new quotation)
-  if (textarea) textarea.value = existingSpecs.trim() || DEFAULT_SPECS;
-
-  const modal = new bootstrap.Modal(document.getElementById('specsModal'));
-  modal.show();
-}
-
-function saveSpecsAndSubmit() {
-  const textarea  = document.getElementById('material_specs_textarea');
-  const field     = document.getElementById('material_specs_field');
-  if (field && textarea) field.value = textarea.value.trim();
-
-  // Hide modal then submit
-  const modalEl  = document.getElementById('specsModal');
-  const instance = bootstrap.Modal.getInstance(modalEl);
-  if (instance) instance.hide();
-
-  // Small delay so modal animation completes before submit
-  setTimeout(() => { _doSubmit(); }, 300);
-}
-
-function skipSpecs() {
-  const field = document.getElementById('material_specs_field');
-  if (field) field.value = '';
-
-  const modalEl  = document.getElementById('specsModal');
-  const instance = bootstrap.Modal.getInstance(modalEl);
-  if (instance) instance.hide();
-
-  setTimeout(() => { _doSubmit(); }, 300);
-}
-
-function _doSubmit() {
-  document.getElementById('projectForm').submit();
-}
-
 // ─── Form Submission ───────────────────────────────────────────────────────────
 // Validates and builds rooms payload. Returns true if valid, false otherwise.
 function _validateForm() {
@@ -781,7 +728,8 @@ function _validateForm() {
 }
 
 function validateAndSubmit() {
-  return _validateForm();
+  if (!_validateForm()) return false;
+  return true;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

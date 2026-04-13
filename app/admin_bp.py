@@ -218,10 +218,13 @@ def payment_settings():
             if key in ('razorpay_key_secret', 'webhook_secret', 'smtp_pass') and not val:
                 continue
             AppSetting.set(key, val)
+        # Material specs — preserve newlines, allow blanking
+        AppSetting.set('material_specs', request.form.get('material_specs', '').strip())
         db.session.commit()
-        flash('Payment settings updated successfully.', 'success')
+        flash('Settings updated successfully.', 'success')
         return redirect(url_for('admin.payment_settings'))
     settings = {k: AppSetting.get(k, '') for k in KEYS}
+    settings['material_specs'] = AppSetting.get('material_specs', '')
     return render_template('admin/payment_settings.html',
                            title='Payment Settings', settings=settings)
 

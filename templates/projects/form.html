@@ -60,8 +60,6 @@
          value="{{ project.discount_type if project else 'none' }}">
   <input type="hidden" name="discount_value" id="discount_value_field"
          value="{{ project.discount_value if project else '0' }}">
-  <input type="hidden" name="material_specs" id="material_specs_field"
-         value="{{ project.material_specs if project and project.material_specs else '' }}">
 
   <div class="row g-3">
     <!-- LEFT: Customer + Rooms -->
@@ -193,7 +191,7 @@
         </div>
         <div class="card-footer bg-transparent">
           <div class="d-grid gap-2">
-            <button type="button" class="btn btn-success fw-bold" onclick="showSpecsModal()">
+            <button type="submit" class="btn btn-success fw-bold" onclick="return validateAndSubmit()">
               <i class="bi bi-check-circle me-2"></i>
               {{ 'Save Quotation' if (not project or project.status == 'draft') else 'Update Quotation' }}
             </button>
@@ -234,7 +232,7 @@
 
   <!-- Mobile sticky save button -->
   <div class="d-lg-none ki-sticky-save">
-    <button type="button" class="btn btn-success w-100 fw-bold py-3" onclick="showSpecsModal()">
+    <button type="submit" class="btn btn-success w-100 fw-bold py-3" onclick="return validateAndSubmit()">
       <i class="bi bi-check-circle me-2"></i>
       {{ 'Save Quotation' if (not project or project.status == 'draft') else 'Update Quotation' }}
       &nbsp;–&nbsp;<span id="final-total-mobile">&#8377;0.00</span>
@@ -316,34 +314,8 @@
     </div>
   </div>
 </div>
-<!-- Material Specifications Modal -->
-<div class="modal fade" id="specsModal" tabindex="-1" aria-labelledby="specsModalLabel" aria-hidden="true" data-bs-backdrop="static">
-  <div class="modal-dialog modal-dialog-centered modal-lg">
-    <div class="modal-content">
-      <div class="modal-header ki-card-header py-2">
-        <h6 class="modal-title fw-bold mb-0" id="specsModalLabel">
-          <i class="bi bi-card-checklist me-2"></i>Material Specifications
-        </h6>
-      </div>
-      <div class="modal-body">
-        <p class="text-muted small mb-2">These specifications will be included in the PDF quotation. You can edit them before saving.</p>
-        <textarea class="form-control font-monospace" id="material_specs_textarea"
-                  rows="14" style="font-size:0.82rem; line-height:1.6"></textarea>
-      </div>
-      <div class="modal-footer pt-2">
-        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="skipSpecs()">
-          <i class="bi bi-x-circle me-1"></i>Skip / Don't Include
-        </button>
-        <button type="button" class="btn btn-success ki-btn-primary" onclick="saveSpecsAndSubmit()">
-          <i class="bi bi-check-circle me-1"></i>Save &amp; Submit Quotation
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
-<script id="default-specs-data" type="application/json">{{ default_specs | tojson }}</script>
 <script src="{{ url_for('static', filename='js/project_form.js') }}"></script>
 {% endblock %}

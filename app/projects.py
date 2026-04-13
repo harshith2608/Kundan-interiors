@@ -15,17 +15,6 @@ projects_bp = Blueprint('projects', __name__)
 WOOD_TYPES = ['Acrylic', 'Laminates', 'Veneer']
 WORK_TYPES = ['Box Work', 'Frame Work']
 
-DEFAULT_MATERIAL_SPECS = """MATERIAL SPECIFICATIONS:
-\u25cf Plywood: Gurjan 18mm BWP, termite proof, ISI marked 25yrs warranty
-\u25cf Inside finishing 0.8 mm White laminate.
-\u25cf Outer finish, laminate of 1.2mm
-\u25cf Sliding channels made of Ebco or Similar
-\u25cf Hinges: Heavy gauge of L-type hinges with SS finish make of Ebco soft closing
-\u25cf Handles: Profile handles made of ESS ESS or Ebco Regular handles made of SS
-\u25cf Drawers, channels and all other fittings made of Ebco
-\u25cf Baskets: SS Baskets made of Ebco or Similar"""
-
-
 def _get_work_type_rates():
     return {r.work_type: r.rate_per_sqft for r in WorkTypeRate.query.all()}
 
@@ -211,7 +200,6 @@ def create_project():
             discount_value = float(request.form.get('discount_value', 0) or 0)
         except ValueError:
             discount_value = 0.0
-        material_specs = request.form.get('material_specs', '').strip() or None
         rooms_json     = request.form.get('rooms_data', '[]')
 
         errors = []
@@ -250,7 +238,6 @@ def create_project():
                                               'email': email,
                                               'address': address},
                                    rooms_json=rooms_json,
-                                   default_specs=DEFAULT_MATERIAL_SPECS,
                                    project=None)
 
         # If JS auto-saved a draft, promote it to complete instead of creating new
@@ -268,7 +255,6 @@ def create_project():
             project.address        = address or None
             project.discount_type  = discount_type if discount_type in ('percentage', 'fixed') else 'none'
             project.discount_value = discount_value
-            project.material_specs = material_specs
         else:
             project = Project(
                 customer_name=customer_name,
@@ -279,7 +265,6 @@ def create_project():
                 grand_total=0.0,
                 discount_type=discount_type if discount_type in ('percentage', 'fixed') else 'none',
                 discount_value=discount_value,
-                material_specs=material_specs
             )
             db.session.add(project)
             db.session.flush()
@@ -301,7 +286,6 @@ def create_project():
                            work_type_rates=work_type_rates,
                            form_data={},
                            rooms_json='[]',
-                           default_specs=DEFAULT_MATERIAL_SPECS,
                            project=None)
 
 
@@ -387,7 +371,6 @@ def edit_project(project_id):
             discount_value = float(request.form.get('discount_value', 0) or 0)
         except ValueError:
             discount_value = 0.0
-        material_specs = request.form.get('material_specs', '').strip() or None
         rooms_json     = request.form.get('rooms_data', '[]')
 
         errors = []
@@ -424,7 +407,6 @@ def edit_project(project_id):
                                    form_data={'customer_name': customer_name,
                                               'mobile': mobile, 'email': email},
                                    rooms_json=rooms_json,
-                                   default_specs=DEFAULT_MATERIAL_SPECS,
                                    project=project)
 
         was_draft = project.status == 'draft'
@@ -434,7 +416,6 @@ def edit_project(project_id):
         project.address        = address or None
         project.discount_type  = discount_type if discount_type in ('percentage', 'fixed') else 'none'
         project.discount_value = discount_value
-        project.material_specs = material_specs
         grand_total = _save_project_data(project, rooms_data)
         project.grand_total = grand_total
         project.status = 'complete'
@@ -461,7 +442,6 @@ def edit_project(project_id):
                                'address': project.address or ''
                            },
                            rooms_json=existing_json,
-                           default_specs=DEFAULT_MATERIAL_SPECS,
                            project=project)
 
 
