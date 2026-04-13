@@ -117,7 +117,7 @@ def _save_project_data(project, rooms_data):
                 work_type=work_type
             )
             db.session.add(item)
-            grand_total += area * (wood_rates.get(wood_type, 0) + work_type_rates.get(work_type, 0))
+            grand_total += area * wood_rates.get(wood_type, 0)
 
             # Auto-learn item name (case-insensitive dedup)
             if not MasterItem.query.filter(MasterItem.name.ilike(item_name)).first():
@@ -317,11 +317,7 @@ def view_project(project_id):
     for wt in WORK_TYPES:
         area = work_totals.get(wt, 0.0)
         if area > 0:
-            rate = work_type_rates.get(wt, 0.0)
-            work_summary.append({
-                'work_type': wt, 'area': area,
-                'rate': rate, 'subtotal': area * rate
-            })
+            work_summary.append({'work_type': wt, 'area': area})
     edit_logs = (ProjectEditLog.query
                  .filter_by(project_id=project.id)
                  .order_by(ProjectEditLog.edited_at.desc())

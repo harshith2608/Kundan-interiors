@@ -564,7 +564,6 @@ function recalcAll() {
 
   let grandTotal = 0;
   Object.entries(woodAreas).forEach(([wt, area]) => { grandTotal += area * (woodRates[wt] || 0); });
-  Object.entries(workAreas).forEach(([wt, area]) => { grandTotal += area * (workTypeRates[wt] || 0); });
 
   renderSummary(woodAreas, workAreas, grandTotal);
 
@@ -661,18 +660,17 @@ function renderSummary(woodAreas, workAreas, grandTotal) {
         <span class="summary-wood-value">₹${(area*rate).toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
       </div>`;
   });
-  html += '<div class="small fw-semibold text-muted mb-1 mt-2">Work Cost</div>';
+  html += '<div class="small fw-semibold text-muted mb-1 mt-2">Work Type</div>';
   Object.entries(workAreas).forEach(([wt, area]) => {
     if (area <= 0) return;
-    const rate = workTypeRates[wt] || 0;
-    const c    = workColors[wt] || { bg:'#f3f4f6', color:'#374151' };
+    const c = workColors[wt] || { bg:'#f3f4f6', color:'#374151' };
     html += `
       <div class="summary-wood-row">
         <span class="summary-wood-label">
           <span class="badge me-1" style="background:${c.bg};color:${c.color}">${wt}</span>
         </span>
         <span class="text-muted small">${area.toFixed(2)} sqft</span>
-        <span class="summary-wood-value">₹${(area*rate).toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+        <span class="summary-wood-value text-muted small">display only</span>
       </div>`;
   });
   panel.innerHTML = html;

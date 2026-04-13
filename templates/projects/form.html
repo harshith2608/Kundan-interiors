@@ -215,13 +215,6 @@
             <span class="small text-success fw-bold">&#8377;{{ "{:,.0f}".format(rate) }}/sqft</span>
           </li>
           {% endfor %}
-          <li class="list-group-item py-1 small text-muted fw-semibold bg-light">Work Type</li>
-          {% for wt, rate in work_type_rates.items() %}
-          <li class="list-group-item d-flex justify-content-between py-2">
-            <span class="small fw-medium">{{ wt }}</span>
-            <span class="small text-primary fw-bold">&#8377;{{ "{:,.0f}".format(rate) }}/sqft</span>
-          </li>
-          {% endfor %}
         </ul>
       </div>
       </div>{# end summary-panel #}
