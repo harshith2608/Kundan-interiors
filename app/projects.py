@@ -623,6 +623,25 @@ def download_pdf(project_id):
                      download_name=filename, mimetype='application/pdf')
 
 
+@projects_bp.route('/projects/<int:project_id>/pdf/customer')
+@login_required
+def download_customer_pdf(project_id):
+    project = Project.query.get_or_404(project_id)
+    if not current_user.is_admin and project.created_by != current_user.id:
+        if not ProjectAccess.query.filter_by(project_id=project_id, user_id=current_user.id).first():
+            abort(403)
+    from .pdf_utils import generate_customer_pdf
+    pay_settings = {k: AppSetting.get(k, '')
+                    for k in ['upi_id', 'bank_name', 'account_name', 'account_number', 'ifsc_code']}
+    payments_list = Payment.query.filter_by(project_id=project_id).all()
+    total_paid = sum(p.amount for p in payments_list)
+    pdf_buffer = generate_customer_pdf(project, payment_settings=pay_settings, total_paid=total_paid)
+    filename = f"CustomerQuotation_{project.customer_name.replace(' ', '_')}_{project.id}.pdf"
+    as_attachment = request.args.get('download') == '1'
+    return send_file(pdf_buffer, as_attachment=as_attachment,
+                     download_name=filename, mimetype='application/pdf')
+
+
 @projects_bp.route('/projects/<int:project_id>/whatsapp')
 @login_required
 def whatsapp_share(project_id):
