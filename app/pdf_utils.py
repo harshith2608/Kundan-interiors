@@ -359,6 +359,25 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     elements.append(grand_total_table)
     elements.append(Spacer(1, 20))
 
+    # ------- MATERIAL SPECIFICATIONS -------
+    if project.material_specs and project.material_specs.strip():
+        elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
+        spec_header_style = ParagraphStyle('SpecHeader', parent=styles['Normal'],
+                                           fontSize=9, textColor=BRAND_DARK,
+                                           fontName='Helvetica-Bold', spaceBefore=4, spaceAfter=4)
+        spec_body_style = ParagraphStyle('SpecBody', parent=styles['Normal'],
+                                         fontSize=8, textColor=colors.HexColor('#333333'),
+                                         leading=13, spaceAfter=1)
+        elements.append(Paragraph("Material Specifications:", spec_header_style))
+        elements.append(Spacer(1, 4))
+        for line in project.material_specs.splitlines():
+            line = line.strip()
+            if line:
+                # Replace bullet character ● with a PDF-safe bullet
+                display = line.replace('●', '\u2022')
+                elements.append(Paragraph(display, spec_body_style))
+        elements.append(Spacer(1, 14))
+
     # ------- TERMS & CONDITIONS -------
     elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
     tc_style = ParagraphStyle('TC', parent=styles['Normal'],
