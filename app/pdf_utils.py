@@ -88,8 +88,17 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     )
 
     # -------  HEADER -------
-    elements.append(Paragraph("Kundann Interiors", title_style))
-    elements.append(Paragraph("Premium Interior Design & Furnishing Solutions", subtitle_style))
+    _co_name    = AppSetting.get('company_name',    '') or 'Kundann Interiors'
+    _co_address = AppSetting.get('company_address', '')
+    _co_mobile  = AppSetting.get('company_mobile',  '')
+    _co_email   = AppSetting.get('company_email',   '')
+    elements.append(Paragraph(_co_name, title_style))
+    _subtitle_parts = []
+    if _co_address: _subtitle_parts.append(_co_address.replace('\n', ', '))
+    if _co_mobile:  _subtitle_parts.append(f'Ph: {_co_mobile}')
+    if _co_email:   _subtitle_parts.append(_co_email)
+    _subtitle_text = '  |  '.join(_subtitle_parts) if _subtitle_parts else 'Premium Interior Design &amp; Furnishing Solutions'
+    elements.append(Paragraph(_subtitle_text, subtitle_style))
     elements.append(HRFlowable(width='100%', thickness=2, color=BRAND_ACCENT, spaceAfter=8))
 
     # QUOTATION LABEL
@@ -347,7 +356,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         elements.append(Paragraph(term, tc_style))
     elements.append(Spacer(1, 8))
     elements.append(Paragraph(
-        "Thank you for choosing <b>Kundann Interiors</b>. We look forward to transforming your space!",
+        f"Thank you for choosing <b>{AppSetting.get('company_name','') or 'Kundann Interiors'}</b>. We look forward to transforming your space!",
         ParagraphStyle('Footer', parent=styles['Normal'],
                        fontSize=9, textColor=BRAND_DARK, alignment=TA_CENTER)
     ))
@@ -453,8 +462,17 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     )
 
     # ------- HEADER -------
-    elements.append(Paragraph("Kundann Interiors", title_style))
-    elements.append(Paragraph("Premium Interior Design & Furnishing Solutions", subtitle_style))
+    _co_name2    = AppSetting.get('company_name',    '') or 'Kundann Interiors'
+    _co_address2 = AppSetting.get('company_address', '')
+    _co_mobile2  = AppSetting.get('company_mobile',  '')
+    _co_email2   = AppSetting.get('company_email',   '')
+    elements.append(Paragraph(_co_name2, title_style))
+    _subtitle_parts2 = []
+    if _co_address2: _subtitle_parts2.append(_co_address2.replace('\n', ', '))
+    if _co_mobile2:  _subtitle_parts2.append(f'Ph: {_co_mobile2}')
+    if _co_email2:   _subtitle_parts2.append(_co_email2)
+    _subtitle_text2 = '  |  '.join(_subtitle_parts2) if _subtitle_parts2 else 'Premium Interior Design &amp; Furnishing Solutions'
+    elements.append(Paragraph(_subtitle_text2, subtitle_style))
     elements.append(HRFlowable(width='100%', thickness=2, color=BRAND_ACCENT, spaceAfter=8))
 
     # QUOTATION LABEL
@@ -624,7 +642,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
         elements.append(Paragraph(term, tc_style))
     elements.append(Spacer(1, 8))
     elements.append(Paragraph(
-        "Thank you for choosing <b>Kundann Interiors</b>. We look forward to transforming your space!",
+        f"Thank you for choosing <b>{AppSetting.get('company_name','') or 'Kundann Interiors'}</b>. We look forward to transforming your space!",
         ParagraphStyle('Footer2', parent=styles['Normal'],
                        fontSize=9, textColor=BRAND_DARK, alignment=TA_CENTER)
     ))
