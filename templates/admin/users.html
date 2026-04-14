@@ -18,6 +18,7 @@
         <tr>
           <th class="ps-3">#</th>
           <th>Username</th>
+          <th>Display Name</th>
           <th class="text-center">Role</th>
           <th class="text-center">Quotations</th>
           <th class="text-center">Created</th>
@@ -35,6 +36,7 @@
               <span class="badge bg-info ms-1 small">You</span>
             {% endif %}
           </td>
+          <td class="text-muted small">{{ user.full_name or '—' }}</td>
           <td class="text-center">
             <span class="badge {% if user.role == 'admin' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
               <i class="bi {% if user.role == 'admin' %}bi-shield-lock{% else %}bi-person{% endif %} me-1"></i>
@@ -127,23 +129,33 @@
 <!-- Per-user modals -->
 {% for user in users %}
 
-<!-- Rename User Modal -->
+<!-- Edit User Modal -->
 <div class="modal fade" id="renameUserModal{{ user.id }}" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered modal-sm">
+  <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow">
       <div class="modal-header ki-card-header">
         <h6 class="modal-title fw-bold">
-          <i class="bi bi-pencil me-2"></i>Rename – {{ user.username }}
+          <i class="bi bi-pencil me-2"></i>Edit User – {{ user.username }}
         </h6>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <form method="POST" action="{{ url_for('admin.rename_user', user_id=user.id) }}" novalidate>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="modal-body">
-          <label class="form-label fw-medium small">New Username</label>
-          <input type="text" name="new_username" class="form-control"
-                 value="{{ user.username }}" required minlength="3" maxlength="80"
-                 autocomplete="off">
+          <div class="mb-3">
+            <label class="form-label fw-medium small">Username <span class="text-danger">*</span></label>
+            <input type="text" name="new_username" class="form-control"
+                   value="{{ user.username }}" required minlength="3" maxlength="80"
+                   autocomplete="off">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-medium small">Display Name <span class="text-muted">(shown in PDF as "Prepared By")</span></label>
+            <input type="text" name="full_name" class="form-control"
+                   value="{{ user.full_name or '' }}"
+                   placeholder="e.g. Vinay Kumar"
+                   maxlength="120" autocomplete="off">
+            <div class="form-text">Leave blank to use the username.</div>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>

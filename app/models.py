@@ -12,9 +12,15 @@ class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    full_name = db.Column(db.String(120), nullable=True)
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(20), nullable=False, default='employee')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @property
+    def display_name(self):
+        """Returns full_name if set, otherwise falls back to username."""
+        return self.full_name.strip() if self.full_name and self.full_name.strip() else self.username
     projects = db.relationship('Project', backref='creator', lazy='dynamic',
                                foreign_keys='Project.created_by')
 

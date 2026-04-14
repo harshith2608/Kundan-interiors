@@ -129,7 +129,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     elements.append(Spacer(1, 4))
     cust_data = [
         ['Customer Name', project.customer_name, 'Mobile', project.mobile],
-        ['Email', project.email or '—', 'Prepared By', project.creator.username],
+        ['Email', project.email or '—', 'Prepared By', project.creator.display_name],
     ]
     if project.address:
         cust_data.append(['Address', Paragraph(project.address, normal_style), '', ''])
@@ -502,7 +502,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     elements.append(Spacer(1, 4))
     cust_data = [
         ['Customer Name', project.customer_name, 'Mobile', project.mobile],
-        ['Email', project.email or '—', 'Prepared By', project.creator.username],
+        ['Email', project.email or '—', 'Prepared By', project.creator.display_name],
     ]
     if project.address:
         cust_data.append(['Address', Paragraph(project.address, normal_style), '', ''])

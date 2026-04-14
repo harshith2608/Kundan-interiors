@@ -129,15 +129,17 @@ def delete_user(user_id):
 def rename_user(user_id):
     user = User.query.get_or_404(user_id)
     new_username = request.form.get('new_username', '').strip()
+    full_name     = request.form.get('full_name', '').strip()
     if not new_username:
         flash('Username cannot be empty.', 'danger')
     elif User.query.filter(User.username == new_username, User.id != user_id).first():
         flash(f'Username "{new_username}" is already taken.', 'danger')
     else:
         old_name = user.username
-        user.username = new_username
+        user.username  = new_username
+        user.full_name = full_name or None
         db.session.commit()
-        flash(f'Username changed from "{old_name}" to "{new_username}".', 'success')
+        flash(f'User "{old_name}" updated successfully.', 'success')
     return redirect(url_for('admin.users'))
 
 
