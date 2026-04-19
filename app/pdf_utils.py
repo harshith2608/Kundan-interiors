@@ -32,8 +32,9 @@ BRAND_DARK = colors.HexColor('#1a237e')
 BRAND_ACCENT = colors.HexColor('#f57f17')
 BRAND_LIGHT = colors.HexColor('#e8eaf6')
 GREY_BG = colors.HexColor('#f5f5f5')
-TABLE_HEADER_BG = colors.HexColor('#283593')
-ROOM_HEADER_BG = colors.HexColor('#3949ab')
+TABLE_HEADER_BG = colors.HexColor('#dde3f5')
+ROOM_HEADER_BG  = colors.HexColor('#c5cef0')
+TABLE_HEADER_FG = colors.HexColor('#1a237e')
 
 
 def generate_pdf(project, payment_settings=None, total_paid=0.0):
@@ -173,7 +174,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         )
         room_header.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), ROOM_HEADER_BG),
-            ('TEXTCOLOR', (0, 0), (-1, -1), colors.white),
+            ('TEXTCOLOR', (0, 0), (-1, -1), TABLE_HEADER_FG),
             ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, -1), 9),
             ('PADDING', (0, 0), (-1, -1), 6),
@@ -207,7 +208,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         item_table.setStyle(TableStyle([
             # Header row
             ('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 8),
             ('ALIGN', (1, 0), (-1, 0), 'CENTER'),
@@ -262,7 +263,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     combo_table = Table(combo_data, colWidths=summary_cw)
     combo_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 9),
         ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
@@ -554,7 +555,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     cost_table = Table(cost_data, colWidths=cost_cw)
     cost_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), TABLE_HEADER_BG),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('TEXTCOLOR', (0, 0), (-1, 0), TABLE_HEADER_FG),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 10),
         ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
