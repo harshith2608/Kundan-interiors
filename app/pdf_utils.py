@@ -35,6 +35,7 @@ GREY_BG = colors.HexColor('#f5f5f5')
 TABLE_HEADER_BG = colors.HexColor('#dde3f5')
 ROOM_HEADER_BG  = colors.HexColor('#c5cef0')
 TABLE_HEADER_FG = colors.HexColor('#1a237e')
+TOTAL_ROW_BG    = colors.HexColor('#c5cef0')
 
 
 def generate_pdf(project, payment_settings=None, total_paid=0.0):
@@ -305,8 +306,8 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     fi = len(total_rows)
     total_rows.append(['', '', 'FINAL TOTAL', f'Rs. {final_total:,.2f}'])
     total_style_cmds += [
-        ('BACKGROUND', (0, fi), (-1, fi), BRAND_DARK),
-        ('TEXTCOLOR', (0, fi), (-1, fi), colors.white),
+        ('BACKGROUND', (0, fi), (-1, fi), TOTAL_ROW_BG),
+        ('TEXTCOLOR', (0, fi), (-1, fi), TABLE_HEADER_FG),
         ('FONTNAME', (0, fi), (-1, fi), 'Helvetica-Bold'),
         ('FONTSIZE', (0, fi), (-1, fi), 12),
         ('ALIGN', (0, fi), (1, fi), 'LEFT'),
@@ -596,8 +597,8 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     total_rows.append(['FINAL TOTAL', f'Rs. {final_total:,.2f}'])
     ft_cw = cost_cw
     total_style_cmds += [
-        ('BACKGROUND', (0, fi), (-1, fi), BRAND_DARK),
-        ('TEXTCOLOR', (0, fi), (-1, fi), colors.white),
+        ('BACKGROUND', (0, fi), (-1, fi), TOTAL_ROW_BG),
+        ('TEXTCOLOR', (0, fi), (-1, fi), TABLE_HEADER_FG),
         ('FONTNAME', (0, fi), (-1, fi), 'Helvetica-Bold'),
         ('FONTSIZE', (0, fi), (-1, fi), 12),
         ('ALIGN', (1, fi), (-1, fi), 'RIGHT'),
