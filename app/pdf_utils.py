@@ -250,6 +250,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     elements.append(Spacer(1, 3))
     combo_data = [['Material & Work Type', 'Total Area (sqft)', 'Rate (Rs./sqft)', 'Amount (Rs.)']]
     combo_total = 0.0
+    combo_area_total = 0.0
     for wood in WOOD_TYPES:
         for work in WORK_TYPES:
             key = f'{wood}|{work}'
@@ -258,6 +259,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                 rate = _item_rates_map.get(key, 0.0)
                 subtotal = area * rate
                 combo_total += subtotal
+                combo_area_total += area
                 combo_data.append([f'{wood} – {work}', f'{area:,.2f}', f'{rate:,.0f}', f'{subtotal:,.2f}'])
     combo_data.append(['', '', 'Subtotal', f'Rs. {combo_total:,.2f}'])
 
@@ -304,7 +306,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
         ]
 
     fi = len(total_rows)
-    total_rows.append(['', '', 'FINAL TOTAL', f'Rs. {final_total:,.2f}'])
+    total_rows.append(['', f'{combo_area_total:,.2f} sqft', 'FINAL TOTAL', f'Rs. {final_total:,.2f}'])
     total_style_cmds += [
         ('BACKGROUND', (0, fi), (-1, fi), TOTAL_ROW_BG),
         ('TEXTCOLOR', (0, fi), (-1, fi), TABLE_HEADER_FG),
@@ -417,6 +419,41 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
                 ('TEXTCOLOR', (2, 0), (2, -1), BRAND_DARK),
             ] + span_cmds_pay))
             elements.append(pay_table)
+
+    # ------- SIGNATURE SECTION -------
+    elements.append(Spacer(1, 36))
+    elements.append(HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#bdbdbd'), spaceAfter=24))
+    _sig_name_style = ParagraphStyle('SigName', parent=styles['Normal'],
+                                     fontSize=9, fontName='Helvetica-Bold', textColor=BRAND_DARK)
+    _sig_role_style = ParagraphStyle('SigRole', parent=styles['Normal'],
+                                     fontSize=8, textColor=colors.HexColor('#757575'))
+    sig_col = page_width * 0.42
+    sig_gap = page_width * 0.16
+    sig_table = Table(
+        [
+            ['', '', ''],
+            [Paragraph(project.customer_name, _sig_name_style), '',
+             Paragraph('Kundan Interior', _sig_name_style)],
+            [Paragraph('Customer', _sig_role_style), '',
+             Paragraph('Proprietor', _sig_role_style)],
+        ],
+        colWidths=[sig_col, sig_gap, sig_col]
+    )
+    sig_table.setStyle(TableStyle([
+        ('TOPPADDING',    (0, 0), (-1, 0), 42),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 0),
+        ('LINEABOVE', (0, 1), (0, 1), 0.8, BRAND_DARK),
+        ('LINEABOVE', (2, 1), (2, 1), 0.8, BRAND_DARK),
+        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+        ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
+        ('TOPPADDING',    (0, 1), (-1, 1), 5),
+        ('BOTTOMPADDING', (0, 1), (-1, 1), 2),
+        ('TOPPADDING',    (0, 2), (-1, 2), 1),
+        ('BOTTOMPADDING', (0, 2), (-1, 2), 0),
+        ('LEFTPADDING',  (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(sig_table)
 
     doc.build(elements)
     buffer.seek(0)
@@ -543,13 +580,15 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     cost_cw   = [page_width * p for p in [0.60, 0.40]]
     cost_data = [['Material & Work Type', 'Amount (Rs.)']]
     mat_total = 0.0
+    total_area_all = 0.0
     for wood in WOOD_TYPES:
         for work in WORK_TYPES:
             key = f'{wood}|{work}'
             area = item_totals2.get(key, 0.0)
             if area > 0:
-                subtotal   = area * _item_rates_map2.get(key, 0.0)
-                mat_total += subtotal
+                subtotal      = area * _item_rates_map2.get(key, 0.0)
+                mat_total    += subtotal
+                total_area_all += area
                 cost_data.append([f'{wood} – {work}', f'{subtotal:,.2f}'])
     cost_data.append(['Total', f'Rs. {mat_total:,.2f}'])
 
@@ -594,7 +633,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
         ]
 
     fi = len(total_rows)
-    total_rows.append(['FINAL TOTAL', f'Rs. {final_total:,.2f}'])
+    total_rows.append([f'FINAL TOTAL  ({total_area_all:,.2f} sqft)', f'Rs. {final_total:,.2f}'])
     ft_cw = cost_cw
     total_style_cmds += [
         ('BACKGROUND', (0, fi), (-1, fi), TOTAL_ROW_BG),
@@ -684,6 +723,41 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
                 ('TEXTCOLOR', (2, 0), (2, -1), BRAND_DARK),
             ] + span_cmds_pay))
             elements.append(pay_table)
+
+    # ------- SIGNATURE SECTION -------
+    elements.append(Spacer(1, 36))
+    elements.append(HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#bdbdbd'), spaceAfter=24))
+    _sig_name_style2 = ParagraphStyle('SigName2', parent=styles['Normal'],
+                                      fontSize=9, fontName='Helvetica-Bold', textColor=BRAND_DARK)
+    _sig_role_style2 = ParagraphStyle('SigRole2', parent=styles['Normal'],
+                                      fontSize=8, textColor=colors.HexColor('#757575'))
+    sig_col2 = page_width * 0.42
+    sig_gap2 = page_width * 0.16
+    sig_table2 = Table(
+        [
+            ['', '', ''],
+            [Paragraph(project.customer_name, _sig_name_style2), '',
+             Paragraph('Kundan Interior', _sig_name_style2)],
+            [Paragraph('Customer', _sig_role_style2), '',
+             Paragraph('Proprietor', _sig_role_style2)],
+        ],
+        colWidths=[sig_col2, sig_gap2, sig_col2]
+    )
+    sig_table2.setStyle(TableStyle([
+        ('TOPPADDING',    (0, 0), (-1, 0), 42),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 0),
+        ('LINEABOVE', (0, 1), (0, 1), 0.8, BRAND_DARK),
+        ('LINEABOVE', (2, 1), (2, 1), 0.8, BRAND_DARK),
+        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+        ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
+        ('TOPPADDING',    (0, 1), (-1, 1), 5),
+        ('BOTTOMPADDING', (0, 1), (-1, 1), 2),
+        ('TOPPADDING',    (0, 2), (-1, 2), 1),
+        ('BOTTOMPADDING', (0, 2), (-1, 2), 0),
+        ('LEFTPADDING',  (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(sig_table2)
 
     doc.build(elements)
     buffer.seek(0)
