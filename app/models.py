@@ -46,8 +46,9 @@ class Project(db.Model):
     status = db.Column(db.String(20), default='complete', nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    rooms    = db.relationship('Room',    backref='project', lazy='dynamic', cascade='all, delete-orphan')
-    payments = db.relationship('Payment', backref='project', lazy='dynamic', cascade='all, delete-orphan')
+    rooms     = db.relationship('Room',           backref='project', lazy='dynamic', cascade='all, delete-orphan')
+    payments  = db.relationship('Payment',        backref='project', lazy='dynamic', cascade='all, delete-orphan')
+    edit_logs = db.relationship('ProjectEditLog', backref='project', lazy='dynamic', cascade='all, delete-orphan')
 
     def get_wood_totals(self):
         """Returns dict of {wood_type: total_area}"""
