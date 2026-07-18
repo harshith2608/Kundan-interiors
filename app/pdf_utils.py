@@ -11,6 +11,21 @@ from .models import AppSetting
 WOOD_TYPES = ['Acrylic', 'Laminates', 'Veneer']
 WORK_TYPES = ['Box Work', 'Frame Work']
 
+DEFAULT_TERMS = (
+    "1. This is a preliminary estimate. Final price may vary based on site conditions and material selection.\n"
+    "2. This quotation is valid for 30 days from the date of issue.\n"
+    "3. A 50% advance payment is required to commence work.\n"
+    "4. Delivery and installation timelines will be communicated separately.\n"
+    "5. Any changes to design or material after order confirmation may attract additional charges."
+)
+
+
+def _get_terms_lines():
+    """Return T&C as a list of non-empty lines, falling back to defaults."""
+    raw = AppSetting.get('terms_conditions', '').strip()
+    lines = [l.strip() for l in (raw or DEFAULT_TERMS).splitlines() if l.strip()]
+    return lines
+
 
 def ft_in(decimal_ft):
     """Convert decimal feet to 'X ft Y in' string."""
@@ -349,14 +364,7 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     tc_style = ParagraphStyle('TC', parent=styles['Normal'],
                               fontSize=7.5, textColor=colors.HexColor('#757575'))
     elements.append(Paragraph("<b>Terms &amp; Conditions:</b>", tc_style))
-    terms = [
-        "1. This is a preliminary estimate. Final price may vary based on site conditions and material selection.",
-        "2. This quotation is valid for 30 days from the date of issue.",
-        "3. A 50% advance payment is required to commence work.",
-        "4. Delivery and installation timelines will be communicated separately.",
-        "5. Any changes to design or material after order confirmation may attract additional charges.",
-    ]
-    for term in terms:
+    for term in _get_terms_lines():
         elements.append(Paragraph(term, tc_style))
     elements.append(Spacer(1, 8))
     elements.append(Paragraph(
@@ -673,13 +681,7 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     tc_style = ParagraphStyle('TC2', parent=styles['Normal'],
                               fontSize=7.5, textColor=colors.HexColor('#757575'))
     elements.append(Paragraph("<b>Terms &amp; Conditions:</b>", tc_style))
-    for term in [
-        "1. This is a preliminary estimate. Final price may vary based on site conditions and material selection.",
-        "2. This quotation is valid for 30 days from the date of issue.",
-        "3. A 50% advance payment is required to commence work.",
-        "4. Delivery and installation timelines will be communicated separately.",
-        "5. Any changes to design or material after order confirmation may attract additional charges.",
-    ]:
+    for term in _get_terms_lines():
         elements.append(Paragraph(term, tc_style))
     elements.append(Spacer(1, 8))
     elements.append(Paragraph(

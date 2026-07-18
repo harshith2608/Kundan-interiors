@@ -205,21 +205,23 @@ def payment_settings():
             if key in ('razorpay_key_secret', 'webhook_secret', 'smtp_pass') and not val:
                 continue
             AppSetting.set(key, val)
-        # Material specs — preserve newlines, allow blanking
-        AppSetting.set('material_specs', request.form.get('material_specs', '').strip())
-        AppSetting.set('company_name',    request.form.get('company_name',    '').strip())
-        AppSetting.set('company_address', request.form.get('company_address', '').strip())
-        AppSetting.set('company_mobile',  request.form.get('company_mobile',  '').strip())
-        AppSetting.set('company_email',   request.form.get('company_email',   '').strip())
+        # Multi-line fields — preserve newlines, allow blanking
+        AppSetting.set('material_specs',    request.form.get('material_specs',    '').strip())
+        AppSetting.set('terms_conditions',  request.form.get('terms_conditions',  '').strip())
+        AppSetting.set('company_name',      request.form.get('company_name',      '').strip())
+        AppSetting.set('company_address',   request.form.get('company_address',   '').strip())
+        AppSetting.set('company_mobile',    request.form.get('company_mobile',    '').strip())
+        AppSetting.set('company_email',     request.form.get('company_email',     '').strip())
         db.session.commit()
         flash('Settings updated successfully.', 'success')
         return redirect(url_for('admin.payment_settings'))
     settings = {k: AppSetting.get(k, '') for k in KEYS}
-    settings['material_specs']   = AppSetting.get('material_specs',   '')
-    settings['company_name']     = AppSetting.get('company_name',     '')
-    settings['company_address']  = AppSetting.get('company_address',  '')
-    settings['company_mobile']   = AppSetting.get('company_mobile',   '')
-    settings['company_email']    = AppSetting.get('company_email',    '')
+    settings['material_specs']    = AppSetting.get('material_specs',   '')
+    settings['terms_conditions']  = AppSetting.get('terms_conditions', '')
+    settings['company_name']      = AppSetting.get('company_name',     '')
+    settings['company_address']   = AppSetting.get('company_address',  '')
+    settings['company_mobile']    = AppSetting.get('company_mobile',   '')
+    settings['company_email']     = AppSetting.get('company_email',    '')
     return render_template('admin/payment_settings.html',
                            title='Payment Settings', settings=settings)
 
