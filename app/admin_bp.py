@@ -6,6 +6,7 @@ from . import db
 from .models import User, Project, Item, Room, WoodRate, WorkTypeRate, ItemRate, MasterRoom, MasterItem, AppSetting, Notification
 from .forms import CreateUserForm, ChangePasswordForm
 from .decorators import admin_required
+from .pdf_utils import DEFAULT_TERMS
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -217,7 +218,7 @@ def payment_settings():
         return redirect(url_for('admin.payment_settings'))
     settings = {k: AppSetting.get(k, '') for k in KEYS}
     settings['material_specs']    = AppSetting.get('material_specs',   '')
-    settings['terms_conditions']  = AppSetting.get('terms_conditions', '')
+    settings['terms_conditions']  = AppSetting.get('terms_conditions', '') or DEFAULT_TERMS
     settings['company_name']      = AppSetting.get('company_name',     '')
     settings['company_address']   = AppSetting.get('company_address',  '')
     settings['company_mobile']    = AppSetting.get('company_mobile',   '')
