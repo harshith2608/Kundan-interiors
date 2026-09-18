@@ -44,6 +44,7 @@ class Project(db.Model):
     discount_type  = db.Column(db.String(20), default='none')   # 'none', 'percentage', 'fixed'
     discount_value = db.Column(db.Float, default=0.0)
     status = db.Column(db.String(20), default='complete', nullable=False)
+    plywood_thickness = db.Column(db.Text, nullable=True, default='')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     rooms     = db.relationship('Room',           backref='project', lazy='dynamic', cascade='all, delete-orphan')

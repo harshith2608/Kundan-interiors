@@ -204,7 +204,8 @@ def create_project():
             discount_value = float(request.form.get('discount_value', 0) or 0)
         except ValueError:
             discount_value = 0.0
-        rooms_json     = request.form.get('rooms_data', '[]')
+        rooms_json        = request.form.get('rooms_data', '[]')
+        plywood_thickness = ','.join(request.form.getlist('plywood_thickness'))
 
         errors = []
         if not customer_name:
@@ -241,7 +242,8 @@ def create_project():
                                    form_data={'customer_name': customer_name,
                                               'mobile': mobile,
                                               'email': email,
-                                              'address': address},
+                                              'address': address,
+                                              'plywood_thickness': plywood_thickness},
                                    rooms_json=rooms_json,
                                    project=None)
 
@@ -254,12 +256,13 @@ def create_project():
                 project = None
 
         if project:
-            project.customer_name  = customer_name
-            project.mobile         = mobile
-            project.email          = email or None
-            project.address        = address or None
-            project.discount_type  = discount_type if discount_type in ('percentage', 'fixed') else 'none'
-            project.discount_value = discount_value
+            project.customer_name     = customer_name
+            project.mobile            = mobile
+            project.email             = email or None
+            project.address           = address or None
+            project.discount_type     = discount_type if discount_type in ('percentage', 'fixed') else 'none'
+            project.discount_value    = discount_value
+            project.plywood_thickness = plywood_thickness
         else:
             project = Project(
                 customer_name=customer_name,
@@ -270,6 +273,7 @@ def create_project():
                 grand_total=0.0,
                 discount_type=discount_type if discount_type in ('percentage', 'fixed') else 'none',
                 discount_value=discount_value,
+                plywood_thickness=plywood_thickness,
             )
             db.session.add(project)
             db.session.flush()
@@ -367,7 +371,8 @@ def edit_project(project_id):
             discount_value = float(request.form.get('discount_value', 0) or 0)
         except ValueError:
             discount_value = 0.0
-        rooms_json     = request.form.get('rooms_data', '[]')
+        rooms_json        = request.form.get('rooms_data', '[]')
+        plywood_thickness = ','.join(request.form.getlist('plywood_thickness'))
 
         errors = []
         if not customer_name:
@@ -402,17 +407,19 @@ def edit_project(project_id):
                                    work_type_rates=work_type_rates,
                                    item_rates=item_rates,
                                    form_data={'customer_name': customer_name,
-                                              'mobile': mobile, 'email': email},
+                                              'mobile': mobile, 'email': email,
+                                              'plywood_thickness': plywood_thickness},
                                    rooms_json=rooms_json,
                                    project=project)
 
         was_draft = project.status == 'draft'
-        project.customer_name  = customer_name
-        project.mobile         = mobile
-        project.email          = email or None
-        project.address        = address or None
-        project.discount_type  = discount_type if discount_type in ('percentage', 'fixed') else 'none'
-        project.discount_value = discount_value
+        project.customer_name     = customer_name
+        project.mobile            = mobile
+        project.email             = email or None
+        project.address           = address or None
+        project.discount_type     = discount_type if discount_type in ('percentage', 'fixed') else 'none'
+        project.discount_value    = discount_value
+        project.plywood_thickness = plywood_thickness
         grand_total = _save_project_data(project, rooms_data)
         project.grand_total = grand_total
         project.status = 'complete'
@@ -437,7 +444,8 @@ def edit_project(project_id):
                                'customer_name': project.customer_name,
                                'mobile': project.mobile,
                                'email': project.email or '',
-                               'address': project.address or ''
+                               'address': project.address or '',
+                               'plywood_thickness': project.plywood_thickness or ''
                            },
                            rooms_json=existing_json,
                            project=project)

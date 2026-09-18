@@ -339,6 +339,24 @@ def generate_pdf(project, payment_settings=None, total_paid=0.0):
     elements.append(grand_total_table)
     elements.append(Spacer(1, 20))
 
+    # ------- PLYWOOD THICKNESS -------
+    _ply_raw = (project.plywood_thickness or '').strip()
+    if _ply_raw:
+        ply_items = [p.strip() for p in _ply_raw.split(',') if p.strip()]
+        if ply_items:
+            elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
+            ply_header_style = ParagraphStyle('PlyHeader', parent=styles['Normal'],
+                                              fontSize=9, textColor=BRAND_DARK,
+                                              fontName='Helvetica-Bold', spaceBefore=4, spaceAfter=4)
+            ply_body_style = ParagraphStyle('PlyBody', parent=styles['Normal'],
+                                            fontSize=8, textColor=colors.HexColor('#333333'),
+                                            leading=13, spaceAfter=1)
+            elements.append(Paragraph("Plywood Used:", ply_header_style))
+            elements.append(Spacer(1, 4))
+            for ply in ply_items:
+                elements.append(Paragraph(f"• {ply}", ply_body_style))
+            elements.append(Spacer(1, 14))
+
     # ------- MATERIAL SPECIFICATIONS -------
     _specs = AppSetting.get('material_specs', '')
     if _specs and _specs.strip():
@@ -657,6 +675,24 @@ def generate_customer_pdf(project, payment_settings=None, total_paid=0.0):
     grand_total_table.setStyle(TableStyle(total_style_cmds))
     elements.append(grand_total_table)
     elements.append(Spacer(1, 20))
+
+    # ------- PLYWOOD THICKNESS -------
+    _ply_raw2 = (project.plywood_thickness or '').strip()
+    if _ply_raw2:
+        ply_items2 = [p.strip() for p in _ply_raw2.split(',') if p.strip()]
+        if ply_items2:
+            elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#bdbdbd'), spaceAfter=8))
+            ply_header_style2 = ParagraphStyle('PlyHeader2', parent=styles['Normal'],
+                                               fontSize=9, textColor=BRAND_DARK,
+                                               fontName='Helvetica-Bold', spaceBefore=4, spaceAfter=4)
+            ply_body_style2 = ParagraphStyle('PlyBody2', parent=styles['Normal'],
+                                             fontSize=8, textColor=colors.HexColor('#333333'),
+                                             leading=13, spaceAfter=1)
+            elements.append(Paragraph("Plywood Used:", ply_header_style2))
+            elements.append(Spacer(1, 4))
+            for ply in ply_items2:
+                elements.append(Paragraph(f"• {ply}", ply_body_style2))
+            elements.append(Spacer(1, 14))
 
     # ------- MATERIAL SPECIFICATIONS -------
     _specs = AppSetting.get('material_specs', '')
