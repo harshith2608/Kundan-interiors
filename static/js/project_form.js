@@ -537,12 +537,14 @@ function onItemField(rk, ik) {
 // ─── Calculations ─────────────────────────────────────────────────────────────
 function recalcAll() {
   const comboAreas = {};  // { 'wood|work': area }
+  let totalArea = 0;
 
   Object.entries(rooms).forEach(([rk, room]) => {
     let roomArea = 0;
     Object.values(room.items).forEach(item => {
       const a = item.area || 0;
       roomArea += a;
+      totalArea += a;
       const key = `${item.wood_type}|${item.work_type}`;
       comboAreas[key] = (comboAreas[key] || 0) + a;
     });
@@ -560,6 +562,20 @@ function recalcAll() {
   if (gtEl) gtEl.textContent = fmt;
 
   _updateFinalTotal(grandTotal);
+
+  // Update boards estimate (8×4 ft = 32 sqft per board)
+  const boardsBox  = document.getElementById('boards-estimate');
+  const boardsArea = document.getElementById('boards-total-area');
+  const boardsCnt  = document.getElementById('boards-count');
+  if (boardsBox) {
+    if (totalArea > 0) {
+      boardsBox.style.display = '';
+      if (boardsArea) boardsArea.textContent = totalArea.toFixed(2) + ' sqft';
+      if (boardsCnt)  boardsCnt.textContent  = '~' + Math.ceil(totalArea / 32);
+    } else {
+      boardsBox.style.display = 'none';
+    }
+  }
 
   // Auto-save draft whenever the cost summary recalculates (room/item change)
   scheduleDraftSave();
