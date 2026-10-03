@@ -8,11 +8,14 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
 
-    # Railway/Render supply DATABASE_URL as postgres:// but SQLAlchemy needs postgresql://
+    # Force psycopg2 dialect — SQLAlchemy 2.x defaults to psycopg3 for postgresql:// URLs
+    # but only psycopg2-binary is installed.
     _db_url = os.environ.get('DATABASE_URL') or \
         'sqlite:///' + os.path.join(BASE_DIR, 'kundans_interiors.db')
     if _db_url.startswith('postgres://'):
-        _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
+        _db_url = _db_url.replace('postgres://', 'postgresql+psycopg2://', 1)
+    elif _db_url.startswith('postgresql://'):
+        _db_url = _db_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
     SQLALCHEMY_DATABASE_URI = _db_url
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
