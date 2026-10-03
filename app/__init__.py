@@ -66,13 +66,28 @@ def create_app(config_name='default'):
         from flask_login import current_user
         unread_count = 0
         if current_user.is_authenticated and current_user.is_admin:
-            from .models import Notification
-            unread_count = Notification.query.filter_by(is_read=False).count()
+            try:
+                from .models import Notification
+                unread_count = Notification.query.filter_by(is_read=False).count()
+            except Exception:
+                pass
         return {'now': datetime.utcnow(), 'unread_notifications_count': unread_count}
 
     with app.app_context():
-        db.create_all()
-        _seed_database()
+        try:
+            db.create_all()
+            # Only seed on first-run / dev — skip in production where data already exists
+            if config_name in ('development', 'default'):
+                _seed_database()
+            else:
+                # In production, try to seed but don't crash the app if DB is slow
+                try:
+                    _seed_database()
+                except Exception:
+                    pass
+        except Exception:
+            # DB may be paused/unreachable at cold start; app will still boot
+            pass
 
     return app
 
